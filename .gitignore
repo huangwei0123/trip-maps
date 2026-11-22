@@ -1,6 +1,7 @@
 credentials.json
 token.json
+client.id
 personal-access.token
-*.kmz
+#*.kmz
 *.kml
 __pycache__/
