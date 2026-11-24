@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PhotoOnMaps — Map Your Photos in 3D & View on Google Earth</title>
 
-  <!-- PWA & Mobile Home Screen App Meta Tags -->
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#1a73e8" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -13,19 +12,19 @@
   <meta name="apple-mobile-web-app-title" content="PhotoOnMaps" />
   <link rel="apple-touch-icon" href="icon-512.png" />
 
-  <!-- MapLibre GL JS CSS -->
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
 
   <style>
     :root {
       --primary: #1a73e8;
       --primary-hover: #1557b0;
+      --success: #188038;
+      --success-hover: #13692e;
       --bg: #f8f9fa;
       --card: #ffffff;
       --border: #dadce0;
       --text: #202124;
       --muted: #5f6368;
-      --success: #188038;
     }
 
     * {
@@ -50,7 +49,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
       flex-wrap: wrap;
       z-index: 10;
     }
@@ -69,7 +68,6 @@
     .brand h1 {
       font-size: 1.12rem;
       font-weight: 700;
-      color: var(--text);
     }
 
     .brand span {
@@ -80,12 +78,12 @@
     .actions {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
     }
 
     .checkbox-label {
-      font-size: 0.85rem;
+      font-size: 0.84rem;
       color: var(--muted);
       display: flex;
       align-items: center;
@@ -98,9 +96,9 @@
       background: var(--primary);
       color: white;
       border: none;
-      padding: 8px 14px;
+      padding: 8px 13px;
       border-radius: 6px;
-      font-size: 0.86rem;
+      font-size: 0.85rem;
       font-weight: 500;
       cursor: pointer;
       transition: background 0.15s;
@@ -125,6 +123,14 @@
       background: #f1f3f4;
     }
 
+    button.save-btn {
+      background: var(--success);
+    }
+
+    button.save-btn:hover:not(:disabled) {
+      background: var(--success-hover);
+    }
+
     .workspace {
       display: flex;
       flex: 1;
@@ -147,18 +153,18 @@
       background: linear-gradient(135deg, #e8f0fe 0%, #f1f8ff 100%);
       border: 1px solid #c2dbff;
       border-radius: 10px;
-      padding: 14px;
+      padding: 13px;
     }
 
     .hero-card h2 {
-      font-size: 0.96rem;
+      font-size: 0.94rem;
       font-weight: 600;
       color: #174ea6;
       margin-bottom: 4px;
     }
 
     .hero-card p {
-      font-size: 0.82rem;
+      font-size: 0.81rem;
       color: #3c4043;
       line-height: 1.4;
     }
@@ -166,7 +172,7 @@
     .dropzone {
       border: 2px dashed #1a73e8;
       border-radius: 10px;
-      padding: 18px 14px;
+      padding: 16px 14px;
       text-align: center;
       cursor: pointer;
       transition: all 0.2s;
@@ -179,14 +185,14 @@
     }
 
     .dropzone p {
-      font-size: 0.9rem;
+      font-size: 0.89rem;
       font-weight: 600;
       color: var(--primary);
-      margin-bottom: 4px;
+      margin-bottom: 3px;
     }
 
     .dropzone span {
-      font-size: 0.77rem;
+      font-size: 0.76rem;
       color: var(--muted);
     }
 
@@ -204,14 +210,9 @@
       outline: none;
     }
 
-    .url-loader input:focus {
-      border-color: var(--primary);
-    }
-
     .url-loader button {
       padding: 7px 10px;
       font-size: 0.81rem;
-      white-space: nowrap;
     }
 
     .stats {
@@ -331,12 +332,6 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: transform 0.15s ease, background 0.15s ease;
-    }
-
-    .photo-pin:hover {
-      background: #d93025;
-      transform: rotate(-45deg) scale(1.15);
     }
 
     .photo-pin::after {
@@ -355,12 +350,12 @@
 
     .popup-card {
       text-align: center;
-      width: 240px;
+      width: 245px;
     }
 
     .popup-card img {
       width: 100%;
-      max-height: 185px;
+      max-height: 190px;
       object-fit: cover;
       border-radius: 6px;
       margin-bottom: 6px;
@@ -371,13 +366,83 @@
       display: block;
       font-size: 0.88rem;
       margin-bottom: 3px;
-      color: var(--text);
     }
 
     .popup-card small {
       color: var(--muted);
       font-size: 0.76rem;
       display: block;
+    }
+
+    /* Save to Cloud Directory Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      padding: 16px;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-card {
+      background: white;
+      border-radius: 12px;
+      max-width: 440px;
+      width: 100%;
+      padding: 22px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .modal-card h3 {
+      font-size: 1.1rem;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .field-group label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .field-group input {
+      padding: 9px 11px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.88rem;
+    }
+
+    .share-result {
+      background: #e6f4ea;
+      border: 1px solid #ceead6;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 0.82rem;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .share-result input {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #a8dab5;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      background: white;
     }
 
     @media (max-width: 768px) {
@@ -407,43 +472,40 @@
     </div>
 
     <div class="actions">
-      <label class="checkbox-label" title="Enable 3D mountain elevation relief">
+      <label class="checkbox-label">
         <input type="checkbox" id="terrain3dCheckbox" checked />
         3D Terrain
       </label>
-      <label class="checkbox-label" title="Draws a route line connecting pins">
+      <label class="checkbox-label">
         <input type="checkbox" id="connectPathCheckbox" checked />
         Connect path
       </label>
-      <button id="loadDemoBtn" class="secondary" title="Reload Mount Sanitas example">Demo Hike</button>
+      <button id="loadDemoBtn" class="secondary">Demo Hike</button>
       <button id="resetViewBtn" class="secondary" disabled>Reset 3D View</button>
-      <button id="copyShareLinkBtn" class="secondary" style="display: none;">Copy Share Link</button>
+      <button id="openSaveModalBtn" class="save-btn" disabled>Save to My Directory</button>
+      <button id="downloadKmzBtn" disabled>Download .KMZ</button>
       <button id="clearBtn" class="secondary" disabled>Clear</button>
-      <button id="downloadKmzBtn" disabled>Download .KMZ for Google Earth</button>
     </div>
   </header>
 
   <div class="workspace">
     <aside class="sidebar">
-      <!-- Welcome / Call-to-Action Banner -->
       <div class="hero-card">
         <h2>Input your photos from desktop or phone, and view on Google Earth</h2>
-        <p>Select geotagged photos below to plot your route in 3D and download a self-contained <b>.KMZ</b> file for Google Earth.</p>
+        <p>Select geotagged photos below to plot your route in 3D, save them in your own folder on our site, or download a <b>.KMZ</b> for Google Earth.</p>
       </div>
 
-      <!-- Drag & Drop / File Picker for Desktop & Mobile -->
       <div class="dropzone" id="dropzone">
         <p>+ Select or Drop Photos (Desktop or Phone)</p>
         <span>Supports JPEG/WebP photos with GPS or an existing .KMZ file</span>
         <input type="file" id="fileInput" accept="image/jpeg,image/jpg,image/heic,image/webp,.kmz" multiple hidden />
       </div>
 
-      <!-- Optional Remote KMZ URL Loader -->
       <div class="url-loader">
         <input
           type="text"
           id="kmzUrlInput"
-          placeholder="Or load KMZ path/URL (e.g. examples/sanitas-20261121.kmz)"
+          placeholder="Load KMZ path (e.g. examples/sanitas-20261121.kmz)"
         />
         <button id="loadUrlBtn" class="secondary">Load</button>
       </div>
@@ -467,15 +529,53 @@
     </div>
   </div>
 
-  <!-- Libraries: MapLibre GL JS (3D Map), exifr (GPS EXIF parser), JSZip (KMZ bundler & unpacker) -->
+  <!-- Save Trip & Images to User's Own Directory Modal -->
+  <div class="modal-backdrop" id="saveModal">
+    <div class="modal-card">
+      <h3>Save Photos & .KMZ to Your Directory</h3>
+      <p style="font-size: 0.82rem; color: #5f6368;">
+        Your photos and .KMZ archive will be stored in <code>/trips/&lt;directory&gt;/</code> on PhotoOnMaps.com with a shareable 3D link.
+      </p>
+
+      <div class="field-group">
+        <label for="userDirInput">Your Directory Name (Username / Folder)</label>
+        <input type="text" id="userDirInput" placeholder="e.g. weihuang" />
+      </div>
+
+      <div class="field-group">
+        <label for="dirPasscodeInput">Directory Passcode (Protects your folder)</label>
+        <input type="password" id="dirPasscodeInput" placeholder="Choose a passcode for this directory" />
+      </div>
+
+      <div class="field-group">
+        <label for="tripNameInput">Trip Name</label>
+        <input type="text" id="tripNameInput" placeholder="e.g. sanitas-hike-2026" />
+      </div>
+
+      <div class="share-result" id="shareResultBox">
+        <strong style="color: #137333;">Saved! Share this 3D Map Link:</strong>
+        <input type="text" id="generatedShareUrl" readonly />
+        <div style="display: flex; gap: 8px;">
+          <button id="copySavedUrlBtn" type="button">Copy Link</button>
+          <a id="downloadHostedKmzLink" href="#" download style="font-size: 0.82rem; align-self: center; color: #1a73e8;">Download Hosted .KMZ</a>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+        <button id="closeSaveModalBtn" class="secondary" type="button">Close</button>
+        <button id="confirmSaveBtn" class="save-btn" type="button">Upload & Save</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
   <script>
     const DEFAULT_DEMO_KMZ = "examples/sanitas-20261121.kmz";
+    const FEATURED_PHOTO_NAME = "IMG_8882.JPEG";
 
-    // Initialize MapLibre GL JS with Esri Satellite Imagery + AWS Terrarium 3D DEM Terrain
     const map = new maplibregl.Map({
       container: "map",
       center: [-105.31, 40.03],
@@ -504,17 +604,8 @@
             maxzoom: 15
           }
         },
-        layers: [
-          {
-            id: "satellite-layer",
-            type: "raster",
-            source: "satellite"
-          }
-        ],
-        terrain: {
-          source: "terrainDem",
-          exaggeration: 1.25
-        },
+        layers: [{ id: "satellite-layer", type: "raster", source: "satellite" }],
+        terrain: { source: "terrainDem", exaggeration: 1.25 },
         sky: {
           "sky-color": "#7ec0ee",
           "sky-horizon-blend": 0.5,
@@ -546,11 +637,7 @@
         type: "line",
         source: "route-source",
         layout: { "line-join": "round", "line-cap": "round" },
-        paint: {
-          "line-color": "#ffffff",
-          "line-width": 5,
-          "line-opacity": 0.75
-        }
+        paint: { "line-color": "#ffffff", "line-width": 5, "line-opacity": 0.75 }
       });
 
       map.addLayer({
@@ -558,25 +645,20 @@
         type: "line",
         source: "route-source",
         layout: { "line-join": "round", "line-cap": "round" },
-        paint: {
-          "line-color": "#ff3b30",
-          "line-width": 3,
-          "line-dasharray": [2, 1.5]
-        }
+        paint: { "line-color": "#ff3b30", "line-width": 3, "line-dasharray": [2, 1.5] }
       });
 
       if (geotaggedPhotos.length > 0) {
-        renderMapOverlays();
+        renderMapOverlays(FEATURED_PHOTO_NAME);
       }
     });
 
-    // DOM Elements
     const pageTitle = document.getElementById("pageTitle");
     const kmzUrlInput = document.getElementById("kmzUrlInput");
     const loadUrlBtn = document.getElementById("loadUrlBtn");
     const loadDemoBtn = document.getElementById("loadDemoBtn");
-    const copyShareLinkBtn = document.getElementById("copyShareLinkBtn");
     const resetViewBtn = document.getElementById("resetViewBtn");
+    const openSaveModalBtn = document.getElementById("openSaveModalBtn");
     const dropzone = document.getElementById("dropzone");
     const fileInput = document.getElementById("fileInput");
     const photoList = document.getElementById("photoList");
@@ -588,11 +670,22 @@
     const connectPathCheckbox = document.getElementById("connectPathCheckbox");
     const terrain3dCheckbox = document.getElementById("terrain3dCheckbox");
 
+    // Modal Elements
+    const saveModal = document.getElementById("saveModal");
+    const closeSaveModalBtn = document.getElementById("closeSaveModalBtn");
+    const confirmSaveBtn = document.getElementById("confirmSaveBtn");
+    const userDirInput = document.getElementById("userDirInput");
+    const dirPasscodeInput = document.getElementById("dirPasscodeInput");
+    const tripNameInput = document.getElementById("tripNameInput");
+    const shareResultBox = document.getElementById("shareResultBox");
+    const generatedShareUrl = document.getElementById("generatedShareUrl");
+    const copySavedUrlBtn = document.getElementById("copySavedUrlBtn");
+    const downloadHostedKmzLink = document.getElementById("downloadHostedKmzLink");
+
     function getActivePhotos() {
       return geotaggedPhotos.filter((p) => p.enabled !== false);
     }
 
-    // Event Listeners
     dropzone.addEventListener("click", () => fileInput.click());
     dropzone.addEventListener("dragover", (e) => {
       e.preventDefault();
@@ -625,30 +718,12 @@
 
     loadDemoBtn.addEventListener("click", () => {
       kmzUrlInput.value = DEFAULT_DEMO_KMZ;
-      loadKmzFromUrl(DEFAULT_DEMO_KMZ, false);
+      loadKmzFromUrl(DEFAULT_DEMO_KMZ, false, FEATURED_PHOTO_NAME);
     });
 
     loadUrlBtn.addEventListener("click", () => {
       const val = kmzUrlInput.value.trim();
       if (val) loadKmzFromUrl(val, true);
-    });
-
-    kmzUrlInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        const val = kmzUrlInput.value.trim();
-        if (val) loadKmzFromUrl(val, true);
-      }
-    });
-
-    copyShareLinkBtn.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(window.location.href);
-        const origText = copyShareLinkBtn.textContent;
-        copyShareLinkBtn.textContent = "Copied!";
-        setTimeout(() => (copyShareLinkBtn.textContent = origText), 2000);
-      } catch {
-        prompt("Copy this shareable link:", window.location.href);
-      }
     });
 
     removeNoGpsBtn.addEventListener("click", () => {
@@ -658,6 +733,73 @@
     });
 
     clearBtn.addEventListener("click", () => resetWorkspace(true));
+
+    // Save Modal Handlers
+    openSaveModalBtn.addEventListener("click", () => {
+      shareResultBox.style.display = "none";
+      saveModal.classList.add("open");
+    });
+    closeSaveModalBtn.addEventListener("click", () => saveModal.classList.remove("open"));
+    copySavedUrlBtn.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(generatedShareUrl.value);
+      copySavedUrlBtn.textContent = "Copied!";
+      setTimeout(() => (copySavedUrlBtn.textContent = "Copy Link"), 2000);
+    });
+
+    confirmSaveBtn.addEventListener("click", async () => {
+      const userDir = userDirInput.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+      const passcode = dirPasscodeInput.value.trim();
+      const tripSlug = tripNameInput.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-") || `trip-${Date.now()}`;
+
+      if (!userDir || !passcode) {
+        alert("Please enter both a Directory Name and a Passcode.");
+        return;
+      }
+
+      const active = getActivePhotos();
+      if (!active.length) return;
+
+      confirmSaveBtn.disabled = true;
+      confirmSaveBtn.textContent = "Uploading to Server...";
+
+      try {
+        const kmzBlob = await buildKmzBlob(active, tripSlug);
+        const formData = new FormData();
+        formData.append("user_dir", userDir);
+        formData.append("passcode", passcode);
+        formData.append("trip_slug", tripSlug);
+        formData.append("kmz_file", kmzBlob, `${tripSlug}.kmz`);
+
+        // Also attach individual resized images so they are browsable in the user's directory
+        active.forEach((photo, idx) => {
+          if (photo.resizedBlob) {
+            const cleanName = photo.name.replace(/[^a-zA-Z0-9._-]/g, "_") || `photo_${idx + 1}.jpg`;
+            formData.append("photos[]", photo.resizedBlob, cleanName);
+          }
+        });
+
+        const res = await fetch("save_trip.php", {
+          method: "POST",
+          body: formData
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "Server rejected upload");
+        }
+
+        const fullShareUrl = `${window.location.origin}/?kmz=${encodeURIComponent(data.kmz_path)}`;
+        generatedShareUrl.value = fullShareUrl;
+        downloadHostedKmzLink.href = data.kmz_path;
+        shareResultBox.style.display = "flex";
+        window.history.replaceState({}, "", `/?kmz=${encodeURIComponent(data.kmz_path)}`);
+      } catch (err) {
+        alert(`Save failed: ${err.message}`);
+      } finally {
+        confirmSaveBtn.disabled = false;
+        confirmSaveBtn.textContent = "Upload & Save";
+      }
+    });
 
     function updateNoGpsButton() {
       const noGpsCount = document.querySelectorAll(".photo-item.no-gps").length;
@@ -683,7 +825,6 @@
       clearMapMarkers();
 
       pageTitle.textContent = "PhotoOnMaps.com";
-      copyShareLinkBtn.style.display = "none";
       updateNoGpsButton();
 
       if (clearQueryParam && window.location.protocol.startsWith("http")) {
@@ -701,7 +842,7 @@
       return inputUrl;
     }
 
-    async function loadKmzFromUrl(rawInput, updateBrowserUrl = false) {
+    async function loadKmzFromUrl(rawInput, updateBrowserUrl = false, autoOpenPhotoName = null) {
       resetWorkspace(false);
       statusText.textContent = "Loading trip...";
       loadUrlBtn.disabled = true;
@@ -713,32 +854,28 @@
           throw new Error(`HTTP ${response.status} (${response.statusText})`);
         }
         const arrayBuffer = await response.arrayBuffer();
-        await parseKmzBuffer(arrayBuffer, rawInput);
-
-        copyShareLinkBtn.style.display = "inline-block";
+        await parseKmzBuffer(arrayBuffer, rawInput, autoOpenPhotoName);
 
         if (updateBrowserUrl && window.location.protocol.startsWith("http")) {
           const newUrl = `${window.location.pathname}?kmz=${encodeURIComponent(rawInput)}`;
           window.history.replaceState({}, "", newUrl);
         }
       } catch (err) {
-        console.error("Failed to load KMZ from URL:", err);
+        console.error("Failed to load KMZ:", err);
         statusText.textContent = "Ready";
       } finally {
         loadUrlBtn.disabled = false;
       }
     }
 
-    async function parseKmzBuffer(arrayBuffer, sourceLabel = "Trip") {
+    async function parseKmzBuffer(arrayBuffer, sourceLabel = "Trip", autoOpenPhotoName = null) {
       statusText.textContent = "Unpacking KMZ...";
       const zip = await JSZip.loadAsync(arrayBuffer);
 
       const kmlFileEntry = Object.values(zip.files).find(
         (f) => !f.dir && f.name.toLowerCase().endsWith(".kml")
       );
-      if (!kmlFileEntry) {
-        throw new Error("No .kml file found inside the KMZ archive.");
-      }
+      if (!kmlFileEntry) throw new Error("No .kml file found inside KMZ.");
 
       const imageBlobMap = {};
       const rawImageBlobs = {};
@@ -815,7 +952,7 @@
         appendSidebarItem(photoEntry, true);
       }
 
-      renderMapOverlays();
+      renderMapOverlays(autoOpenPhotoName);
       updateUI();
       statusText.textContent = "Loaded in 3D";
     }
@@ -847,7 +984,6 @@
       const files = Array.from(fileList);
       if (!files.length) return;
 
-      // If currently showing the default demo trip, replace it with the user's own photos
       if (kmzUrlInput.value.trim() === DEFAULT_DEMO_KMZ && geotaggedPhotos.length > 0) {
         resetWorkspace(true);
         kmzUrlInput.value = "";
@@ -982,10 +1118,7 @@
           features: [
             {
               type: "Feature",
-              geometry: {
-                type: "LineString",
-                coordinates: lineCoords
-              }
+              geometry: { type: "LineString", coordinates: lineCoords }
             }
           ]
         });
@@ -1002,7 +1135,7 @@
       active.forEach((p) => bounds.extend([p.lon, p.lat]));
 
       map.fitBounds(bounds, {
-        padding: { top: 80, bottom: 80, left: 80, right: 80 },
+        padding: { top: 90, bottom: 80, left: 80, right: 80 },
         maxZoom: 15.2,
         pitch: terrain3dCheckbox.checked ? 58 : 0,
         bearing: terrain3dCheckbox.checked ? -20 : 0,
@@ -1010,10 +1143,12 @@
       });
     }
 
-    function renderMapOverlays() {
+    function renderMapOverlays(autoOpenPhotoName = null) {
       clearMapMarkers();
       const active = getActivePhotos();
       if (!active.length) return;
+
+      let featuredEntry = null;
 
       active.forEach((photo) => {
         const el = document.createElement("div");
@@ -1024,7 +1159,7 @@
           ? `<img src="${photo.previewUrl}" alt="${escapeHtml(photo.name)}" />`
           : "";
 
-        const popup = new maplibregl.Popup({ offset: 22, maxWidth: "270px" }).setHTML(`
+        const popup = new maplibregl.Popup({ offset: 22, maxWidth: "275px" }).setHTML(`
           <div class="popup-card">
             ${imgTag}
             <strong>${escapeHtml(photo.name)}</strong>
@@ -1039,16 +1174,33 @@
 
         photo.marker = marker;
         activeMarkers.push(marker);
+
+        if (
+          autoOpenPhotoName &&
+          photo.name.toLowerCase() === autoOpenPhotoName.toLowerCase()
+        ) {
+          featuredEntry = photo;
+        }
       });
 
       updateRouteLine();
       fitMapToPins(true);
+
+      // Automatically open IMG_8882.JPEG popup once camera settles
+      if (featuredEntry && featuredEntry.marker) {
+        setTimeout(() => {
+          if (!featuredEntry.marker.getPopup().isOpen()) {
+            featuredEntry.marker.togglePopup();
+          }
+        }, 1600);
+      }
     }
 
     function updateUI() {
       const count = getActivePhotos().length;
       statsBar.firstElementChild.textContent = `${count} geotagged pin${count === 1 ? "" : "s"}`;
       downloadKmzBtn.disabled = count === 0;
+      openSaveModalBtn.disabled = count === 0;
       resetViewBtn.disabled = count === 0;
       clearBtn.disabled = photoList.children.length === 0;
     }
@@ -1061,20 +1213,14 @@
         .replace(/"/g, "&quot;");
     }
 
-    downloadKmzBtn.addEventListener("click", async () => {
-      const active = getActivePhotos();
-      if (!active.length) return;
-
-      downloadKmzBtn.disabled = true;
-      downloadKmzBtn.textContent = "Building KMZ...";
-
+    async function buildKmzBlob(active, docTitle) {
       const zip = new JSZip();
       const imgFolder = zip.folder("images");
 
       let kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
-    <name>${escapeHtml(pageTitle.textContent)}</name>
+    <name>${escapeHtml(docTitle)}</name>
     <Style id="photoPin">
       <IconStyle>
         <scale>1.2</scale>
@@ -1126,12 +1272,19 @@
     </Placemark>\n`;
       }
 
-      kml += `  </Document>
-</kml>`;
-
+      kml += `  </Document>\n</kml>`;
       zip.file("doc.kml", kml);
+      return await zip.generateAsync({ type: "blob" });
+    }
 
-      const kmzBlob = await zip.generateAsync({ type: "blob" });
+    downloadKmzBtn.addEventListener("click", async () => {
+      const active = getActivePhotos();
+      if (!active.length) return;
+
+      downloadKmzBtn.disabled = true;
+      downloadKmzBtn.textContent = "Building KMZ...";
+
+      const kmzBlob = await buildKmzBlob(active, pageTitle.textContent);
       const downloadUrl = URL.createObjectURL(kmzBlob);
       const a = document.createElement("a");
       a.href = downloadUrl;
@@ -1142,18 +1295,21 @@
       URL.revokeObjectURL(downloadUrl);
 
       downloadKmzBtn.disabled = false;
-      downloadKmzBtn.textContent = "Download .KMZ for Google Earth";
+      downloadKmzBtn.textContent = "Download .KMZ";
     });
 
-    // Auto-load ?kmz=... if specified, otherwise load default examples/sanitas-20261121.kmz
     window.addEventListener("DOMContentLoaded", () => {
       const params = new URLSearchParams(window.location.search);
-      const kmzParam = params.get("kmz") || DEFAULT_DEMO_KMZ;
-      kmzUrlInput.value = kmzParam;
-      loadKmzFromUrl(kmzParam, false);
+      const kmzParam = params.get("kmz");
+      if (kmzParam) {
+        kmzUrlInput.value = kmzParam;
+        loadKmzFromUrl(kmzParam, false);
+      } else {
+        kmzUrlInput.value = DEFAULT_DEMO_KMZ;
+        loadKmzFromUrl(DEFAULT_DEMO_KMZ, false, FEATURED_PHOTO_NAME);
+      }
     });
 
-    // Register PWA Service Worker
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
         navigator.serviceWorker.register("sw.js").catch((err) => {
