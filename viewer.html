@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PhotoOnMaps — Full-Size Viewer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0e0e10;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+    .topbar {
+      background: #18181b;
+      border-bottom: 1px solid #27272a;
+      padding: 10px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .info {
+      min-width: 0;
+      flex: 1;
+    }
+    .title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .title {
+      font-size: 0.96rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .counter {
+      background: #27272a;
+      color: #d4d4d8;
+      font-size: 0.76rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .meta {
+      font-size: 0.78rem;
+      color: #a1a1aa;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    button.nav-btn {
+      background: #27272a;
+      color: #fff;
+      border: 1px solid #3f3f46;
+      padding: 7px 13px;
+      border-radius: 6px;
+      font-size: 0.84rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button.nav-btn:hover:not(:disabled) {
+      background: #3f3f46;
+    }
+    button.nav-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    .download-btn {
+      background: #1a73e8;
+      color: #fff;
+      text-decoration: none;
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 0.84rem;
+      font-weight: 500;
+      white-space: nowrap;
+      margin-left: 4px;
+    }
+    .download-btn:hover { background: #1557b0; }
+
+    .stage {
+      position: relative;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 14px 56px;
+      overflow: hidden;
+    }
+    img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 6px;
+      box-shadow: 0 10px 35px rgba(0, 0, 0, 0.65);
+    }
+
+    /* Floating Side Arrow Buttons */
+    .side-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 42px;
+      height: 56px;
+      background: rgba(24, 24, 27, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #fff;
+      font-size: 1.35rem;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+    .side-arrow:hover:not(:disabled) {
+      background: rgba(63, 63, 70, 0.9);
+    }
+    .side-arrow:disabled {
+      opacity: 0.2;
+      cursor: not-allowed;
+    }
+    .side-arrow.prev { left: 12px; }
+    .side-arrow.next { right: 12px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="info">
+      <div class="title-row">
+        <div class="title" id="photoTitle">Waiting for photo...</div>
+        <span class="counter" id="photoCounter">0 / 0</span>
+      </div>
+      <div class="meta" id="photoMeta"></div>
+    </div>
+
+    <div class="controls">
+      <button class="nav-btn" id="prevBtn" title="Previous photo (Left Arrow)">&larr; Previous</button>
+      <button class="nav-btn" id="nextBtn" title="Next photo (Right Arrow)">Next &rarr;</button>
+      <a class="download-btn" id="downloadLink" href="#" download>Download</a>
+    </div>
+  </div>
+
+  <div class="stage">
+    <button class="side-arrow prev" id="sidePrevBtn" title="Previous photo">&lsaquo;</button>
+    <img id="fullImage" src="" alt="" />
+    <button class="side-arrow next" id="sideNextBtn" title="Next photo">&rsaquo;</button>
+  </div>
+
+  <script>
+    let playlist = [];
+    let currentIndex = 0;
+
+    const photoTitle = document.getElementById("photoTitle");
+    const photoCounter = document.getElementById("photoCounter");
+    const photoMeta = document.getElementById("photoMeta");
+    const fullImage = document.getElementById("fullImage");
+    const downloadLink = document.getElementById("downloadLink");
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const sidePrevBtn = document.getElementById("sidePrevBtn");
+    const sideNextBtn = document.getElementById("sideNextBtn");
+
+    function renderCurrentPhoto() {
+      if (!playlist.length) return;
+      if (currentIndex < 0) currentIndex = 0;
+      if (currentIndex >= playlist.length) currentIndex = playlist.length - 1;
+
+      const item = playlist[currentIndex];
+      document.title = `(${currentIndex + 1}/${playlist.length}) ${item.name || "Photo"}`;
+      photoTitle.textContent = item.name || "Photo";
+      photoCounter.textContent = `${currentIndex + 1} / ${playlist.length}`;
+      photoMeta.textContent = item.meta || "";
+      fullImage.src = item.url;
+
+      downloadLink.href = item.url;
+      downloadLink.download = item.name || "photo.jpg";
+
+      const isFirst = currentIndex === 0;
+      const isLast = currentIndex === playlist.length - 1;
+      prevBtn.disabled = isFirst;
+      sidePrevBtn.disabled = isFirst;
+      nextBtn.disabled = isLast;
+      sideNextBtn.disabled = isLast;
+    }
+
+    function stepPhoto(delta) {
+      const nextIdx = currentIndex + delta;
+      if (nextIdx >= 0 && nextIdx < playlist.length) {
+        currentIndex = nextIdx;
+        renderCurrentPhoto();
+      }
+    }
+
+    prevBtn.addEventListener("click", () => stepPhoto(-1));
+    sidePrevBtn.addEventListener("click", () => stepPhoto(-1));
+    nextBtn.addEventListener("click", () => stepPhoto(1));
+    sideNextBtn.addEventListener("click", () => stepPhoto(1));
+
+    // Left / Right keyboard arrow support
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        stepPhoto(-1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        stepPhoto(1);
+      }
+    });
+
+    function applyPayload(data) {
+      if (!data) return;
+      if (Array.isArray(data.items) && data.items.length > 0) {
+        playlist = data.items;
+        currentIndex = typeof data.index === "number" ? data.index : 0;
+        renderCurrentPhoto();
+      } else if (data.url) {
+        playlist = [data];
+        currentIndex = 0;
+        renderCurrentPhoto();
+      }
+    }
+
+    // 1. Load initial playlist & selected index from URL hash on first open
+    if (window.location.hash.length > 1) {
+      try {
+        const initial = JSON.parse(decodeURIComponent(window.location.hash.slice(1)));
+        applyPayload(initial);
+      } catch (e) {
+        console.error("Invalid initial viewer payload", e);
+      }
+    }
+
+    // 2. Receive updates when user clicks another thumbnail or loads a new trip in main tab
+    const channel = new BroadcastChannel("photoonmaps_preview_channel");
+    channel.onmessage = (event) => {
+      applyPayload(event.data);
+    };
+  </script>
+</body>
+</html>

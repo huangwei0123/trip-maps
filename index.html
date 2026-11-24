@@ -232,6 +232,7 @@
     }
 
     .photo-item {
+      position: relative;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -280,6 +281,25 @@
 
     .photo-item.no-gps .photo-coords {
       color: #d93025;
+    }
+
+    .open-tab-btn {
+      background: rgba(26, 115, 232, 0.1);
+      color: #1a73e8;
+      border: 1px solid rgba(26, 115, 232, 0.2);
+      border-radius: 4px;
+      font-size: 0.76rem;
+      font-weight: 500;
+      padding: 3px 8px;
+      cursor: pointer;
+      margin-right: 6px;
+      opacity: 0.8;
+      transition: opacity 0.15s, background 0.15s;
+    }
+
+    .open-tab-btn:hover {
+      background: rgba(26, 115, 232, 0.2);
+      opacity: 1;
     }
 
     .remove-item-btn {
@@ -374,7 +394,7 @@
       display: block;
     }
 
-    /* Save to Cloud Directory Modal */
+    /* Modal Styling */
     .modal-backdrop {
       position: fixed;
       inset: 0;
@@ -482,7 +502,7 @@
       </label>
       <button id="loadDemoBtn" class="secondary">Demo Hike</button>
       <button id="resetViewBtn" class="secondary" disabled>Reset 3D View</button>
-      <button id="openSaveModalBtn" class="save-btn" disabled>Save to My Directory</button>
+      <button id="openSaveModalBtn" class="save-btn" disabled>Save to Site</button>
       <button id="downloadKmzBtn" disabled>Download .KMZ</button>
       <button id="clearBtn" class="secondary" disabled>Clear</button>
     </div>
@@ -529,7 +549,7 @@
     </div>
   </div>
 
-  <!-- Save Trip & Images to User's Own Directory Modal -->
+  <!-- Save Trip modal with individual option buttons -->
   <div class="modal-backdrop" id="saveModal">
     <div class="modal-card">
       <h3>Save Photos & .KMZ to Your Directory</h3>
@@ -561,9 +581,10 @@
         </div>
       </div>
 
-      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+      <div style="display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 4px;">
         <button id="closeSaveModalBtn" class="secondary" type="button">Close</button>
-        <button id="confirmSaveBtn" class="save-btn" type="button">Upload & Save</button>
+        <button id="saveImagesOnlyBtn" class="secondary" type="button">Save Images</button>
+        <button id="saveKmzOnlyBtn" class="save-btn" type="button">Save .KMZ</button>
       </div>
     </div>
   </div>
@@ -673,7 +694,8 @@
     // Modal Elements
     const saveModal = document.getElementById("saveModal");
     const closeSaveModalBtn = document.getElementById("closeSaveModalBtn");
-    const confirmSaveBtn = document.getElementById("confirmSaveBtn");
+    const saveKmzOnlyBtn = document.getElementById("saveKmzOnlyBtn");
+    const saveImagesOnlyBtn = document.getElementById("saveImagesOnlyBtn");
     const userDirInput = document.getElementById("userDirInput");
     const dirPasscodeInput = document.getElementById("dirPasscodeInput");
     const tripNameInput = document.getElementById("tripNameInput");
@@ -682,6 +704,48 @@
     const copySavedUrlBtn = document.getElementById("copySavedUrlBtn");
     const downloadHostedKmzLink = document.getElementById("downloadHostedKmzLink");
 
+    let previewWindow = null;
+    const previewChannel = new BroadcastChannel("photoonmaps_preview_channel");
+
+    let previewWindow = null;
+    const previewChannel = new BroadcastChannel("photoonmaps_preview_channel");
+
+    function buildPreviewPayload(selectedItem) {
+      const visibleItems = getActivePhotos().filter((p) => p.previewUrl);
+      const items = visibleItems.map((p) => ({
+        url: p.previewUrl,
+        name: p.name,
+        meta: `Coordinates: ${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}${p.dateStr ? ` • ${p.dateStr}` : ""}`,
+      }));
+
+      let idx = visibleItems.findIndex((p) => p.id === selectedItem.id);
+      if (idx === -1) {
+        // Fallback if user clicked a non-GPS photo that has a previewUrl
+        items.unshift({
+          url: selectedItem.previewUrl,
+          name: selectedItem.name,
+          meta: selectedItem.dateStr || "No GPS Metadata",
+        });
+        idx = 0;
+      }
+
+      return { items, index: idx };
+    }
+
+    function openInSinglePreviewTab(item) {
+      if (!item.previewUrl) return;
+      const payload = buildPreviewPayload(item);
+
+      if (previewWindow && !previewWindow.closed) {
+        previewChannel.postMessage(payload);
+        previewWindow.focus();
+        return;
+      }
+
+      const viewerUrl = `viewer.html#${encodeURIComponent(JSON.stringify(payload))}`;
+      previewWindow = window.open(viewerUrl, "photoonmaps_view");
+      if (previewWindow) previewWindow.focus();
+    }
     function getActivePhotos() {
       return geotaggedPhotos.filter((p) => p.enabled !== false);
     }
@@ -734,7 +798,7 @@
 
     clearBtn.addEventListener("click", () => resetWorkspace(true));
 
-    // Save Modal Handlers
+    // Modal Events
     openSaveModalBtn.addEventListener("click", () => {
       shareResultBox.style.display = "none";
       saveModal.classList.add("open");
@@ -746,7 +810,7 @@
       setTimeout(() => (copySavedUrlBtn.textContent = "Copy Link"), 2000);
     });
 
-    confirmSaveBtn.addEventListener("click", async () => {
+    async function saveToDirectory(saveMode) {
       const userDir = userDirInput.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
       const passcode = dirPasscodeInput.value.trim();
       const tripSlug = tripNameInput.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-") || `trip-${Date.now()}`;
@@ -759,28 +823,39 @@
       const active = getActivePhotos();
       if (!active.length) return;
 
-      confirmSaveBtn.disabled = true;
-      confirmSaveBtn.textContent = "Uploading to Server...";
+      saveKmzOnlyBtn.disabled = true;
+      saveImagesOnlyBtn.disabled = true;
+      const activeBtn = saveMode === "kmz_only" ? saveKmzOnlyBtn : saveImagesOnlyBtn;
+      const origLabel = activeBtn.textContent;
+      activeBtn.textContent = "Uploading...";
 
       try {
-        const kmzBlob = await buildKmzBlob(active, tripSlug);
         const formData = new FormData();
         formData.append("user_dir", userDir);
         formData.append("passcode", passcode);
         formData.append("trip_slug", tripSlug);
-        formData.append("kmz_file", kmzBlob, `${tripSlug}.kmz`);
+        formData.append("save_mode", saveMode);
 
-        // Also attach individual resized images so they are browsable in the user's directory
-        active.forEach((photo, idx) => {
-          if (photo.resizedBlob) {
-            const cleanName = photo.name.replace(/[^a-zA-Z0-9._-]/g, "_") || `photo_${idx + 1}.jpg`;
-            formData.append("photos[]", photo.resizedBlob, cleanName);
+        if (saveMode === "kmz_only") {
+          const kmzBlob = await buildKmzBlob(active, tripSlug);
+          formData.append("kmz_file", kmzBlob, `${tripSlug}.kmz`);
+        } else {
+          let attached = 0;
+          active.forEach((photo, idx) => {
+            if (photo.resizedBlob) {
+              const cleanName = photo.name.replace(/[^a-zA-Z0-9._-]/g, "_") || `photo_${idx + 1}.jpg`;
+              formData.append("photos[]", photo.resizedBlob, cleanName);
+              attached++;
+            }
+          });
+          if (attached === 0) {
+            throw new Error("No image blobs available to upload.");
           }
-        });
+        }
 
         const res = await fetch("save_trip.php", {
           method: "POST",
-          body: formData
+          body: formData,
         });
         const data = await res.json();
 
@@ -788,18 +863,36 @@
           throw new Error(data.error || "Server rejected upload");
         }
 
-        const fullShareUrl = `${window.location.origin}/?kmz=${encodeURIComponent(data.kmz_path)}`;
-        generatedShareUrl.value = fullShareUrl;
-        downloadHostedKmzLink.href = data.kmz_path;
         shareResultBox.style.display = "flex";
-        window.history.replaceState({}, "", `/?kmz=${encodeURIComponent(data.kmz_path)}`);
+        const statusHeader = shareResultBox.querySelector("strong");
+
+        if (saveMode === "kmz_only" && data.kmz_path) {
+          const fullShareUrl = `${window.location.origin}/?kmz=${encodeURIComponent(data.kmz_path)}`;
+          statusHeader.textContent = "Saved .KMZ! Share this 3D Map Link:";
+          generatedShareUrl.value = fullShareUrl;
+          generatedShareUrl.style.display = "block";
+          copySavedUrlBtn.style.display = "inline-block";
+          downloadHostedKmzLink.href = data.kmz_path;
+          downloadHostedKmzLink.style.display = "inline";
+          window.history.replaceState({}, "", `/?kmz=${encodeURIComponent(data.kmz_path)}`);
+        } else {
+          statusHeader.textContent = `Saved ${data.saved_photos.length} image(s) to /trips/${userDir}/${tripSlug}/`;
+          generatedShareUrl.value = `${window.location.origin}/trips/${userDir}/${tripSlug}/`;
+          generatedShareUrl.style.display = "block";
+          copySavedUrlBtn.style.display = "inline-block";
+          downloadHostedKmzLink.style.display = "none";
+        }
       } catch (err) {
         alert(`Save failed: ${err.message}`);
       } finally {
-        confirmSaveBtn.disabled = false;
-        confirmSaveBtn.textContent = "Upload & Save";
+        saveKmzOnlyBtn.disabled = false;
+        saveImagesOnlyBtn.disabled = false;
+        activeBtn.textContent = origLabel;
       }
-    });
+    }
+
+    saveKmzOnlyBtn.addEventListener("click", () => saveToDirectory("kmz_only"));
+    saveImagesOnlyBtn.addEventListener("click", () => saveToDirectory("images_only"));
 
     function updateNoGpsButton() {
       const noGpsCount = document.querySelectorAll(".photo-item.no-gps").length;
@@ -881,10 +974,14 @@
       const rawImageBlobs = {};
       for (const [path, entry] of Object.entries(zip.files)) {
         if (!entry.dir && /\.(jpe?g|png|gif|webp)$/i.test(path)) {
-          const blob = await entry.async("blob");
+          const rawBlob = await entry.async("blob");
+          const ext = path.split(".").pop().toLowerCase();
+          const mimeType =
+            ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+          const typedBlob = new Blob([rawBlob], { type: mimeType });
           const normalizedPath = path.replace(/^\.?\//, "");
-          imageBlobMap[normalizedPath] = URL.createObjectURL(blob);
-          rawImageBlobs[normalizedPath] = blob;
+          imageBlobMap[normalizedPath] = URL.createObjectURL(typedBlob);
+          rawImageBlobs[normalizedPath] = typedBlob;
         }
       }
 
@@ -932,7 +1029,11 @@
           }
         }
 
-        const plainDesc = descDoc.body.textContent.replace(/\s+/g, " ").trim();
+        let plainDesc = descDoc.body.textContent.replace(/\s+/g, " ").trim();
+        plainDesc = plainDesc
+          .replace(/^(Details:\s*)+/i, "")
+          .replace(/Coordinates:\s*[-0-9.,\s]+$/i, "")
+          .trim();
 
         const photoEntry = {
           id: crypto.randomUUID(),
@@ -1044,7 +1145,7 @@
       const div = document.createElement("div");
       div.className = `photo-item ${hasGps ? "" : "no-gps"}`;
       const thumbHtml = item.previewUrl
-        ? `<img src="${item.previewUrl}" alt="" />`
+        ? `<img src="${item.previewUrl}" alt="" class="thumbnail-pic" />`
         : `<div style="width:48px;height:48px;border-radius:6px;background:#e8eaed;display:flex;align-items:center;justify-content:center;font-size:18px;">📍</div>`;
 
       div.innerHTML = `
@@ -1056,8 +1157,27 @@
             ${hasGps ? `${item.lat.toFixed(5)}, ${item.lon.toFixed(5)}` : "No GPS metadata found"}
           </div>
         </div>
-        <button class="remove-item-btn" title="Remove from list">&times;</button>
+        <div style="display: flex; align-items: center; justify-content: flex-end;">
+          ${item.previewUrl ? `<button class="open-tab-btn" title="Open full-size in preview tab">Open</button>` : ""}
+          <button class="remove-item-btn" title="Remove from list">&times;</button>
+        </div>
       `;
+
+      const openBtn = div.querySelector(".open-tab-btn");
+      if (openBtn) {
+        openBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openInSinglePreviewTab(item, hasGps);
+        });
+      }
+
+      const imgThumb = div.querySelector(".thumbnail-pic");
+      if (imgThumb && item.previewUrl) {
+        imgThumb.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openInSinglePreviewTab(item, hasGps);
+        });
+      }
 
       div.querySelector(".remove-item-btn").addEventListener("click", (e) => {
         e.stopPropagation();
@@ -1186,7 +1306,6 @@
       updateRouteLine();
       fitMapToPins(true);
 
-      // Automatically open IMG_8882.JPEG popup once camera settles
       if (featuredEntry && featuredEntry.marker) {
         setTimeout(() => {
           if (!featuredEntry.marker.getPopup().isOpen()) {
