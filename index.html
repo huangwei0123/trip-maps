@@ -405,7 +405,12 @@
 
       <div class="stats" id="statsBar">
         <span>0 geotagged pins</span>
-        <span id="statusText">Ready</span>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <button id="removeNoGpsBtn" class="secondary" style="padding: 2px 8px; font-size: 0.75rem; display: none;">
+              Remove No-GPS
+            </button>
+            <span id="statusText">Ready</span>
+        </div>
       </div>
 
       <div class="photo-list" id="photoList"></div>
@@ -778,6 +783,11 @@
       });
     }
 
+    // Add this helper and use activePhotos instead of geotaggedPhotos in renderMapOverlays(), updateUI(), and downloadKmzBtn:
+    function getActivePhotos() {
+      return geotaggedPhotos.filter((p) => p.enabled !== false);
+    }
+
     // Process Local Drag-and-Drop Files (Images or .KMZ)
     async function handleFiles(fileList) {
       const files = Array.from(fileList);
@@ -833,44 +843,71 @@
       statusText.textContent = "Ready";
     }
 
+    const removeNoGpsBtn = document.getElementById("removeNoGpsBtn");
+
+    removeNoGpsBtn.addEventListener("click", () => {
+      document.querySelectorAll(".photo-item.no-gps").forEach((el) => el.remove());
+      updateNoGpsButton();
+      updateUI();
+    });
+
+    function updateNoGpsButton() {
+      const noGpsCount = document.querySelectorAll(".photo-item.no-gps").length;
+      removeNoGpsBtn.style.display = noGpsCount > 0 ? "inline-block" : "none";
+    }
+
     function appendSidebarItem(item, hasGps) {
       const div = document.createElement("div");
       div.className = `photo-item ${hasGps ? "" : "no-gps"}`;
-      const thumbHtml = item.previewUrl
-        ? `<img src="${item.previewUrl}" alt="" />`
-        : `<div style="width:50px;height:50px;border-radius:6px;background:#e8eaed;display:flex;align-items:center;justify-content:center;font-size:18px;">📍</div>`;
 
       div.innerHTML = `
-        ${thumbHtml}
+        ${hasGps ? `<input type="checkbox" class="pin-toggle" checked title="Include in map & KMZ" />` : ""}
+        <img src="${item.previewUrl}" alt="" />
         <div class="photo-meta">
           <div class="photo-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
           <div class="photo-coords">
             ${hasGps ? `${item.lat.toFixed(5)}, ${item.lon.toFixed(5)}` : "No GPS metadata found"}
           </div>
         </div>
+        <button class="remove-item-btn" title="Remove from list" style="background:none;border:none;color:#5f6368;font-size:1.1rem;padding:4px 8px;cursor:pointer;">&times;</button>
       `;
 
+      // Delete single item (works for both No-GPS and geotagged items)
+      div.querySelector(".remove-item-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (item.previewUrl && item.previewUrl.startsWith("blob:")) {
+          URL.revokeObjectURL(item.previewUrl);
+        }
+        if (hasGps) {
+          geotaggedPhotos = geotaggedPhotos.filter((p) => p.id !== item.id);
+          renderMapOverlays();
+        }
+        div.remove();
+        updateNoGpsButton();
+        updateUI();
+      });
+
       if (hasGps) {
+        // Toggle pin inclusion without deleting
+        const checkbox = div.querySelector(".pin-toggle");
+        item.enabled = true;
+        checkbox.addEventListener("click", (e) => e.stopPropagation());
+        checkbox.addEventListener("change", () => {
+          item.enabled = checkbox.checked;
+          div.style.opacity = item.enabled ? "1" : "0.5";
+          renderMapOverlays();
+          updateUI();
+        });
+
         div.addEventListener("click", () => {
-          // Close other open popups
-          activeMarkers.forEach((m) => {
-            if (m !== item.marker && m.getPopup().isOpen()) m.togglePopup();
-          });
-
-          map.flyTo({
-            center: [item.lon, item.lat],
-            zoom: 15.8,
-            pitch: terrain3dCheckbox.checked ? 62 : 0,
-            duration: 1400,
-            essential: true
-          });
-
-          if (item.marker && !item.marker.getPopup().isOpen()) {
-            item.marker.togglePopup();
-          }
+          if (!item.enabled) return;
+          map.flyTo([item.lat, item.lon], 16, { duration: 1.2 });
+          if (item.marker) item.marker.openPopup();
         });
       }
+
       photoList.appendChild(div);
+      updateNoGpsButton();
     }
 
     function updateRouteLine() {

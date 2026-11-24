@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Photo to Google Earth KMZ Generator & Viewer</title>
+
+  <!-- Leaflet CSS for Interactive Map Preview -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    :root {
+      --primary: #1a73e8;
+      --primary-hover: #1557b0;
+      --bg: #f8f9fa;
+      --card: #ffffff;
+      --border: #dadce0;
+      --text: #202124;
+      --muted: #5f6368;
+      --success: #188038;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand h1 {
+      font-size: 1.15rem;
+      font-weight: 600;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .checkbox-label {
+      font-size: 0.88rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 9px 16px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+
+    button:disabled {
+      background: #cbd5e1;
+      cursor: not-allowed;
+    }
+
+    button.secondary {
+      background: white;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    button.secondary:hover:not(:disabled) {
+      background: #f1f3f4;
+    }
+
+    .workspace {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: 390px;
+      background: var(--card);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      overflow-y: auto;
+      gap: 12px;
+    }
+
+    .url-loader {
+      display: flex;
+      gap: 6px;
+    }
+
+    .url-loader input {
+      flex: 1;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.84rem;
+      outline: none;
+    }
+
+    .url-loader input:focus {
+      border-color: var(--primary);
+    }
+
+    .url-loader button {
+      padding: 8px 12px;
+      font-size: 0.84rem;
+      white-space: nowrap;
+    }
+
+    .divider {
+      text-align: center;
+      font-size: 0.76rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .dropzone {
+      border: 2px dashed #9aa0a6;
+      border-radius: 10px;
+      padding: 22px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: #fafbfc;
+    }
+
+    .dropzone.dragover {
+      border-color: var(--primary);
+      background: #e8f0fe;
+    }
+
+    .dropzone p {
+      font-size: 0.92rem;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .dropzone span {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .stats {
+      font-size: 0.84rem;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid #f1f3f4;
+      padding-bottom: 6px;
+    }
+
+    .photo-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .photo-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .photo-item:hover {
+      background: #f1f3f4;
+    }
+
+    .photo-item.no-gps {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    .photo-item img {
+      width: 52px;
+      height: 52px;
+      object-fit: cover;
+      border-radius: 6px;
+      background: #eee;
+    }
+
+    .photo-meta {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .photo-name {
+      font-size: 0.88rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .photo-coords {
+      font-size: 0.78rem;
+      color: var(--success);
+      margin-top: 2px;
+    }
+
+    .photo-item.no-gps .photo-coords {
+      color: #d93025;
+    }
+
+    #map {
+      flex: 1;
+      height: 100%;
+    }
+
+    .popup-card {
+      text-align: center;
+      max-width: 260px;
+    }
+
+    .popup-card img {
+      width: 100%;
+      max-height: 200px;
+      object-fit: cover;
+      border-radius: 6px;
+      margin-bottom: 6px;
+    }
+
+    .popup-card strong {
+      display: block;
+      font-size: 0.9rem;
+      margin-bottom: 2px;
+    }
+
+    .popup-card small {
+      color: var(--muted);
+      font-size: 0.78rem;
+      display: block;
+    }
+
+    @media (max-width: 768px) {
+      .workspace {
+        flex-direction: column;
+      }
+      .sidebar {
+        width: 100%;
+        height: 48%;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1a73e8" stroke-width="2">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="2" y1="12" x2="22" y2="12"></line>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+      </svg>
+      <h1 id="pageTitle">Trip Maps — Photo & KMZ Viewer</h1>
+    </div>
+
+    <div class="actions">
+      <label class="checkbox-label" title="Draws a line connecting pins">
+        <input type="checkbox" id="connectPathCheckbox" checked />
+        Connect path
+      </label>
+      <button id="copyShareLinkBtn" class="secondary" style="display: none;">Copy Share Link</button>
+      <button id="clearBtn" class="secondary" disabled>Clear</button>
+      <button id="downloadKmzBtn" disabled>Download .KMZ</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <!-- Load Remote KMZ URL -->
+      <div class="url-loader">
+        <input
+          type="text"
+          id="kmzUrlInput"
+          placeholder="Paste GitHub KMZ URL or path (e.g. examples/sanitas-20261121.kmz)"
+        />
+        <button id="loadUrlBtn" class="secondary">Load KMZ</button>
+      </div>
+
+      <div class="divider">— or upload your own —</div>
+
+      <!-- Drag & Drop Local Photos or KMZ -->
+      <div class="dropzone" id="dropzone">
+        <p>Drag & drop photos or a .KMZ file</p>
+        <span>Extracts GPS metadata or unpacks an existing KMZ archive</span>
+        <input type="file" id="fileInput" accept="image/jpeg,image/jpg,image/heic,image/webp,.kmz" multiple hidden />
+      </div>
+
+      <div class="stats" id="statsBar">
+        <span>0 geotagged pins</span>
+        <span id="statusText">Ready</span>
+      </div>
+
+      <div class="photo-list" id="photoList"></div>
+    </aside>
+
+    <main id="map"></main>
+  </div>
+
+  <!-- Libraries: Leaflet (Map), exifr (GPS EXIF parser), JSZip (KMZ bundler & unpacker) -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+  <script>
+    // 1. Initialize Interactive Map (Esri World Imagery Satellite Layer)
+    const map = L.map("map").setView([39.8283, -98.5795], 4);
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      {
+        attribution: "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics",
+        maxZoom: 19,
+      }
+    ).addTo(map);
+
+    const markerLayer = L.layerGroup().addTo(map);
+    let routePolyline = null;
+    let geotaggedPhotos = [];
+    let currentKmzSourceParam = null;
+
+    // DOM Elements
+    const pageTitle = document.getElementById("pageTitle");
+    const kmzUrlInput = document.getElementById("kmzUrlInput");
+    const loadUrlBtn = document.getElementById("loadUrlBtn");
+    const copyShareLinkBtn = document.getElementById("copyShareLinkBtn");
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("fileInput");
+    const photoList = document.getElementById("photoList");
+    const statsBar = document.getElementById("statsBar");
+    const statusText = document.getElementById("statusText");
+    const downloadKmzBtn = document.getElementById("downloadKmzBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const connectPathCheckbox = document.getElementById("connectPathCheckbox");
+
+    // Event Listeners
+    dropzone.addEventListener("click", () => fileInput.click());
+    dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.classList.add("dragover");
+    });
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("dragover");
+      handleFiles(e.dataTransfer.files);
+    });
+    fileInput.addEventListener("change", (e) => {
+      handleFiles(e.target.files);
+      fileInput.value = "";
+    });
+    connectPathCheckbox.addEventListener("change", renderMapOverlays);
+
+    loadUrlBtn.addEventListener("click", () => {
+      const val = kmzUrlInput.value.trim();
+      if (val) loadKmzFromUrl(val, true);
+    });
+
+    kmzUrlInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const val = kmzUrlInput.value.trim();
+        if (val) loadKmzFromUrl(val, true);
+      }
+    });
+
+    copyShareLinkBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        const origText = copyShareLinkBtn.textContent;
+        copyShareLinkBtn.textContent = "Copied!";
+        setTimeout(() => (copyShareLinkBtn.textContent = origText), 2000);
+      } catch {
+        prompt("Copy this shareable link:", window.location.href);
+      }
+    });
+
+    clearBtn.addEventListener("click", () => resetWorkspace(true));
+
+    function resetWorkspace(clearQueryParam = false) {
+      geotaggedPhotos.forEach((p) => {
+        if (p.previewUrl && p.previewUrl.startsWith("blob:")) {
+          URL.revokeObjectURL(p.previewUrl);
+        }
+      });
+      geotaggedPhotos = [];
+      photoList.innerHTML = "";
+      markerLayer.clearLayers();
+      if (routePolyline) {
+        map.removeLayer(routePolyline);
+        routePolyline = null;
+      }
+      pageTitle.textContent = "Trip Maps — Photo & KMZ Viewer";
+      copyShareLinkBtn.style.display = "none";
+      currentKmzSourceParam = null;
+
+      if (clearQueryParam && window.location.protocol.startsWith("http")) {
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, "", cleanUrl);
+      }
+      updateUI();
+    }
+
+    // Convert standard GitHub /blob/ links to CORS-enabled raw.githubusercontent.com URLs
+    function resolveKmzFetchUrl(inputUrl) {
+      const githubBlobRegex = /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/;
+      const match = inputUrl.match(githubBlobRegex);
+      if (match) {
+        return `https://raw.githubusercontent.com/${match[1]}/${match[2]}/${match[3]}`;
+      }
+      return inputUrl;
+    }
+
+    // Fetch and Unpack a Remote KMZ File
+    async function loadKmzFromUrl(rawInput, updateBrowserUrl = false) {
+      resetWorkspace(false);
+      statusText.textContent = "Downloading KMZ...";
+      loadUrlBtn.disabled = true;
+
+      try {
+        const fetchUrl = resolveKmzFetchUrl(rawInput);
+        const response = await fetch(fetchUrl);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status} (${response.statusText})`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        await parseKmzBuffer(arrayBuffer, rawInput);
+
+        currentKmzSourceParam = rawInput;
+        copyShareLinkBtn.style.display = "inline-block";
+
+        if (updateBrowserUrl && window.location.protocol.startsWith("http")) {
+          const newUrl = `${window.location.pathname}?kmz=${encodeURIComponent(rawInput)}`;
+          window.history.replaceState({}, "", newUrl);
+        }
+      } catch (err) {
+        console.error("Failed to load KMZ from URL:", err);
+        statusText.textContent = "Failed to load KMZ";
+        alert(
+          `Could not load KMZ from:\n${rawInput}\n\nError: ${err.message}\n\nTip: Make sure the repository is public and the file path is accurate.`
+        );
+      } finally {
+        loadUrlBtn.disabled = false;
+      }
+    }
+
+    // Unpack KMZ (doc.kml + bundled images) using JSZip
+    async function parseKmzBuffer(arrayBuffer, sourceLabel = "Trip") {
+      statusText.textContent = "Unpacking KMZ...";
+      const zip = await JSZip.loadAsync(arrayBuffer);
+
+      // Find the .kml file inside the archive (usually doc.kml)
+      const kmlFileEntry = Object.values(zip.files).find(
+        (f) => !f.dir && f.name.toLowerCase().endsWith(".kml")
+      );
+      if (!kmlFileEntry) {
+        throw new Error("No .kml file found inside the KMZ archive.");
+      }
+
+      // Extract all bundled image files into Blob URLs keyed by relative archive path
+      const imageBlobMap = {};
+      const rawImageBlobs = {};
+      for (const [path, entry] of Object.entries(zip.files)) {
+        if (!entry.dir && /\.(jpe?g|png|gif|webp)$/i.test(path)) {
+          const blob = await entry.async("blob");
+          const normalizedPath = path.replace(/^\.?\//, "");
+          imageBlobMap[normalizedPath] = URL.createObjectURL(blob);
+          rawImageBlobs[normalizedPath] = blob;
+        }
+      }
+
+      const kmlText = await kmlFileEntry.async("text");
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(kmlText, "application/xml");
+
+      const docNameNode = xmlDoc.querySelector("Document > name");
+      if (docNameNode && docNameNode.textContent.trim()) {
+        pageTitle.textContent = docNameNode.textContent.trim();
+      } else {
+        const fileName = sourceLabel.split("/").pop();
+        pageTitle.textContent = fileName;
+      }
+
+      const placemarks = Array.from(xmlDoc.querySelectorAll("Placemark"));
+
+      for (const pm of placemarks) {
+        const pointNode = pm.querySelector("Point > coordinates");
+        if (!pointNode) continue; // Skip LineString route placemarks
+
+        const coordParts = pointNode.textContent.trim().split(",");
+        if (coordParts.length < 2) continue;
+
+        const lon = parseFloat(coordParts[0]);
+        const lat = parseFloat(coordParts[1]);
+        const alt = coordParts[2] ? parseFloat(coordParts[2]) : 0;
+        if (isNaN(lat) || isNaN(lon)) continue;
+
+        const nameNode = pm.querySelector("name");
+        const name = nameNode ? nameNode.textContent.trim() : "Pinned Location";
+
+        const descNode = pm.querySelector("description");
+        const descRaw = descNode ? descNode.textContent : "";
+
+        // Parse description HTML to locate embedded <img src="..."> and metadata
+        const descDoc = parser.parseFromString(descRaw, "text/html");
+        const imgEl = descDoc.querySelector("img");
+        let previewUrl = "";
+        let matchedBlob = null;
+
+        if (imgEl) {
+          const srcAttr = decodeURIComponent(imgEl.getAttribute("src") || "").replace(/^\.?\//, "");
+          if (imageBlobMap[srcAttr]) {
+            previewUrl = imageBlobMap[srcAttr];
+            matchedBlob = rawImageBlobs[srcAttr];
+          } else if (/^https?:\/\//i.test(srcAttr)) {
+            previewUrl = srcAttr;
+          }
+        }
+
+        // Extract clean text subtitle (e.g., Date Taken) from description
+        const plainDesc = descDoc.body.textContent.replace(/\s+/g, " ").trim();
+
+        const photoEntry = {
+          id: crypto.randomUUID(),
+          name,
+          lat,
+          lon,
+          alt,
+          date: new Date(0),
+          dateStr: plainDesc || `${lat.toFixed(5)}, ${lon.toFixed(5)}`,
+          previewUrl,
+          resizedBlob: matchedBlob,
+          marker: null,
+        };
+
+        geotaggedPhotos.push(photoEntry);
+        appendSidebarItem(photoEntry, true);
+      }
+
+      renderMapOverlays();
+      updateUI();
+      statusText.textContent = "Loaded";
+    }
+
+    // Helper: Resize image via HTML5 Canvas for lightweight KMZ embedding
+    function resizeImageToBlob(file, maxWidth = 1000, quality = 0.82) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          URL.revokeObjectURL(url);
+          canvas.toBlob((blob) => resolve(blob), "image/jpeg", quality);
+        };
+        img.src = url;
+      });
+    }
+
+    // Process Local Drag-and-Drop Files (Images or .KMZ)
+    async function handleFiles(fileList) {
+      const files = Array.from(fileList);
+      if (!files.length) return;
+
+      // Check if user dropped a local .kmz file
+      const kmzFile = files.find((f) => f.name.toLowerCase().endsWith(".kmz"));
+      if (kmzFile) {
+        resetWorkspace(true);
+        const buf = await kmzFile.arrayBuffer();
+        await parseKmzBuffer(buf, kmzFile.name);
+        return;
+      }
+
+      statusText.textContent = `Processing ${files.length} file(s)...`;
+
+      for (const file of files) {
+        try {
+          // Pass `true` so exifr parses all GPS & EXIF tags properly
+          const exifData = await exifr.parse(file, true);
+          const previewUrl = URL.createObjectURL(file);
+
+          if (exifData && typeof exifData.latitude === "number" && typeof exifData.longitude === "number") {
+            const rawDate = exifData.DateTimeOriginal || exifData.CreateDate || new Date(file.lastModified);
+            const dateObj = rawDate instanceof Date ? rawDate : new Date(rawDate);
+            const resizedBlob = await resizeImageToBlob(file);
+
+            const photoEntry = {
+              id: crypto.randomUUID(),
+              name: file.name,
+              lat: exifData.latitude,
+              lon: exifData.longitude,
+              alt: typeof exifData.GPSAltitude === "number" ? exifData.GPSAltitude : 0,
+              date: dateObj,
+              dateStr: isNaN(dateObj) ? "Unknown date" : dateObj.toLocaleString(),
+              previewUrl,
+              resizedBlob,
+              marker: null,
+            };
+
+            geotaggedPhotos.push(photoEntry);
+            appendSidebarItem(photoEntry, true);
+          } else {
+            appendSidebarItem({ name: file.name, previewUrl }, false);
+          }
+        } catch (err) {
+          console.error("Failed to read EXIF for", file.name, err);
+          appendSidebarItem({ name: file.name, previewUrl: "" }, false);
+        }
+      }
+
+      // Sort chronologically
+      geotaggedPhotos.sort((a, b) => a.date - b.date);
+      renderMapOverlays();
+      updateUI();
+      statusText.textContent = "Ready";
+    }
+
+    function appendSidebarItem(item, hasGps) {
+      const div = document.createElement("div");
+      div.className = `photo-item ${hasGps ? "" : "no-gps"}`;
+      const thumbHtml = item.previewUrl
+        ? `<img src="${item.previewUrl}" alt="" />`
+        : `<div style="width:52px;height:52px;border-radius:6px;background:#e8eaed;display:flex;align-items:center;justify-content:center;font-size:18px;">📍</div>`;
+
+      div.innerHTML = `
+        ${thumbHtml}
+        <div class="photo-meta">
+          <div class="photo-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
+          <div class="photo-coords">
+            ${hasGps ? `${item.lat.toFixed(5)}, ${item.lon.toFixed(5)}` : "No GPS metadata found"}
+          </div>
+        </div>
+      `;
+
+      if (hasGps) {
+        div.addEventListener("click", () => {
+          map.flyTo([item.lat, item.lon], 16, { duration: 1.2 });
+          if (item.marker) item.marker.openPopup();
+        });
+      }
+      photoList.appendChild(div);
+    }
+
+    function renderMapOverlays() {
+      markerLayer.clearLayers();
+      if (routePolyline) {
+        map.removeLayer(routePolyline);
+        routePolyline = null;
+      }
+
+      if (!geotaggedPhotos.length) return;
+
+      const latLngs = [];
+
+      geotaggedPhotos.forEach((photo) => {
+        const coords = [photo.lat, photo.lon];
+        latLngs.push(coords);
+
+        const imgTag = photo.previewUrl
+          ? `<img src="${photo.previewUrl}" alt="${escapeHtml(photo.name)}" />`
+          : "";
+
+        const marker = L.marker(coords).bindPopup(`
+          <div class="popup-card">
+            ${imgTag}
+            <strong>${escapeHtml(photo.name)}</strong>
+            <small>${escapeHtml(photo.dateStr)}</small>
+          </div>
+        `);
+
+        photo.marker = marker;
+        marker.addTo(markerLayer);
+      });
+
+      if (connectPathCheckbox.checked && latLngs.length > 1) {
+        routePolyline = L.polyline(latLngs, {
+          color: "#ff5252",
+          weight: 3,
+          dashArray: "6, 6",
+        }).addTo(map);
+      }
+
+      const bounds = L.latLngBounds(latLngs);
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    }
+
+    function updateUI() {
+      const count = geotaggedPhotos.length;
+      statsBar.firstElementChild.textContent = `${count} geotagged pin${count === 1 ? "" : "s"}`;
+      downloadKmzBtn.disabled = count === 0;
+      clearBtn.disabled = photoList.children.length === 0;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    // Generate Self-Contained .KMZ Archive
+    downloadKmzBtn.addEventListener("click", async () => {
+      if (!geotaggedPhotos.length) return;
+
+      downloadKmzBtn.disabled = true;
+      downloadKmzBtn.textContent = "Building KMZ...";
+
+      const zip = new JSZip();
+      const imgFolder = zip.folder("images");
+
+      let kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>${escapeHtml(pageTitle.textContent)}</name>
+    <Style id="photoPin">
+      <IconStyle>
+        <scale>1.2</scale>
+        <Icon>
+          <href>http://maps.google.com/mapfiles/kml/paddle/red-circle.png</href>
+        </Icon>
+      </IconStyle>
+    </Style>
+    <Style id="routeLine">
+      <LineStyle>
+        <color>ff0055ff</color>
+        <width>3</width>
+      </LineStyle>
+    </Style>
+`;
+
+      geotaggedPhotos.forEach((photo, idx) => {
+        let imgHtml = "";
+        if (photo.resizedBlob) {
+          const safeFilename = `photo_${idx + 1}.jpg`;
+          imgFolder.file(safeFilename, photo.resizedBlob);
+          imgHtml = `<img src="images/${safeFilename}" width="420" /><br/>`;
+        }
+
+        const descHtml = `${imgHtml}<b>Details:</b> ${escapeHtml(photo.dateStr)}<br/><b>Coordinates:</b> ${photo.lat.toFixed(6)}, ${photo.lon.toFixed(6)}`;
+
+        kml += `    <Placemark>
+      <name>${escapeHtml(photo.name)}</name>
+      <styleUrl>#photoPin</styleUrl>
+      <description><![CDATA[${descHtml}]]></description>
+      <Point>
+        <coordinates>${photo.lon},${photo.lat},${photo.alt}</coordinates>
+      </Point>
+    </Placemark>\n`;
+      });
+
+      if (connectPathCheckbox.checked && geotaggedPhotos.length > 1) {
+        const coordString = geotaggedPhotos
+          .map((p) => `${p.lon},${p.lat},${p.alt}`)
+          .join(" ");
+
+        kml += `    <Placemark>
+      <name>Photo Route</name>
+      <styleUrl>#routeLine</styleUrl>
+      <LineString>
+        <tessellate>1</tessellate>
+        <coordinates>${coordString}</coordinates>
+      </LineString>
+    </Placemark>\n`;
+      }
+
+      kml += `  </Document>
+</kml>`;
+
+      zip.file("doc.kml", kml);
+
+      const kmzBlob = await zip.generateAsync({ type: "blob" });
+      const downloadUrl = URL.createObjectURL(kmzBlob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = "trip_photos.kmz";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(downloadUrl);
+
+      downloadKmzBtn.disabled = false;
+      downloadKmzBtn.textContent = "Download .KMZ";
+    });
+
+    // 3. Auto-load KMZ if ?kmz=... query parameter is present in URL
+    window.addEventListener("DOMContentLoaded", () => {
+      const params = new URLSearchParams(window.location.search);
+      const kmzParam = params.get("kmz");
+      if (kmzParam) {
+        kmzUrlInput.value = kmzParam;
+        loadKmzFromUrl(kmzParam, false);
+      }
+    });
+  </script>
+</body>
+</html>

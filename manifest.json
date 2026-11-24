@@ -2,7 +2,7 @@
   "name": "3D Trip Maps — Photo & KMZ Viewer",
   "short_name": "Trip Maps",
   "description": "View geotagged photos and KMZ routes on an interactive 3D terrain map.",
-  "start_url": "/trip-maps/",
+  "start_url": /trip-maps/?kmz=examples/sanitas-20261121.kmz",
   "scope": "/trip-maps/",
   "display": "standalone",
   "orientation": "any",
