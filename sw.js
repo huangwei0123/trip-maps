@@ -1,10 +1,10 @@
-const CACHE_NAME = "trip-maps-v1";
+const CACHE_NAME = "photo-on-maps-v1";
 const APP_SHELL = [
-  "/trip-maps/",
-  "/trip-maps/index.html",
-  "/trip-maps/manifest.json",
-  "/trip-maps/icon.svg",
-  "/trip-maps/icon-512.png"
+  "/",
+  "/index.html",
+  "/manifest.json",
+  "/icon.svg",
+  "/icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {
