@@ -552,7 +552,7 @@
     </div>
   </div>
 
-<!-- Login / Register Modal -->
+  <!-- Login / Register Modal -->
   <div class="modal-backdrop" id="authModal">
     <div class="modal-card">
       <div style="display: flex; gap: 8px; border-bottom: 1px solid #dadce0; padding-bottom: 10px;">
@@ -740,8 +740,6 @@
     const closeSaveModalBtn = document.getElementById("closeSaveModalBtn");
     const saveKmzOnlyBtn = document.getElementById("saveKmzOnlyBtn");
     const saveImagesOnlyBtn = document.getElementById("saveImagesOnlyBtn");
-    const userDirInput = document.getElementById("userDirInput");
-    const dirPasscodeInput = document.getElementById("dirPasscodeInput");
     const tripNameInput = document.getElementById("tripNameInput");
     const shareResultBox = document.getElementById("shareResultBox");
     const generatedShareUrl = document.getElementById("generatedShareUrl");
@@ -755,6 +753,7 @@
     function buildPreviewPayload(selectedItem) {
       const visibleItems = getActivePhotos().filter((p) => p.previewUrl);
       const items = visibleItems.map((p) => ({
+        id: p.id,
         url: p.previewUrl,
         name: p.name,
         meta: `Coordinates: ${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}${p.dateStr ? ` • ${p.dateStr}` : ""}`,
@@ -763,6 +762,7 @@
       let idx = visibleItems.findIndex((p) => p.id === selectedItem.id);
       if (idx === -1) {
         items.unshift({
+          id: selectedItem.id,
           url: selectedItem.previewUrl,
           name: selectedItem.name,
           meta: selectedItem.dateStr || "No GPS Metadata",
@@ -784,9 +784,38 @@
       }
 
       const viewerUrl = `viewer.html#${encodeURIComponent(JSON.stringify(payload))}`;
-      previewWindow = window.open(viewerUrl, "photoonmaps_view");
+      previewWindow = window.open(
+        viewerUrl,
+        "photoonmaps_view",
+        "width=1100,height=820,resizable=yes,scrollbars=yes"
+      );
       if (previewWindow) previewWindow.focus();
     }
+
+    previewChannel.onmessage = (event) => {
+      if (!event.data || event.data.type !== "sync_map_pin") return;
+
+      const targetPhoto = geotaggedPhotos.find((p) => p.id === event.data.id);
+      if (!targetPhoto || targetPhoto.enabled === false) return;
+
+      activeMarkers.forEach((m) => {
+        if (m !== targetPhoto.marker && m.getPopup().isOpen()) {
+          m.togglePopup();
+        }
+      });
+
+      map.flyTo({
+        center: [targetPhoto.lon, targetPhoto.lat],
+        zoom: 15.8,
+        pitch: terrain3dCheckbox.checked ? 62 : 0,
+        duration: 1200,
+        essential: true
+      });
+
+      if (targetPhoto.marker && !targetPhoto.marker.getPopup().isOpen()) {
+        targetPhoto.marker.togglePopup();
+      }
+    };
 
     dropzone.addEventListener("click", () => fileInput.click());
     dropzone.addEventListener("dragover", (e) => {
@@ -836,10 +865,6 @@
 
     clearBtn.addEventListener("click", () => resetWorkspace(true));
 
-    openSaveModalBtn.addEventListener("click", () => {
-      shareResultBox.style.display = "none";
-      saveModal.classList.add("open");
-    });
     closeSaveModalBtn.addEventListener("click", () => saveModal.classList.remove("open"));
     copySavedUrlBtn.addEventListener("click", async () => {
       await navigator.clipboard.writeText(generatedShareUrl.value);
@@ -848,7 +873,7 @@
     });
 
     let currentUser = null;
-    let authMode = "login"; // 'login' or 'register'
+    let authMode = "login";
 
     const userBadge = document.getElementById("userBadge");
     const openAuthModalBtn = document.getElementById("openAuthModalBtn");
@@ -871,11 +896,13 @@
         userBadge.style.display = "inline";
         openAuthModalBtn.style.display = "none";
         logoutBtn.style.display = "inline-block";
+        openMyTripsBtn.style.display = "inline-block";
         lockedDirDisplay.textContent = `/trip/${currentUser}/`;
       } else {
         userBadge.style.display = "none";
         openAuthModalBtn.style.display = "inline-block";
         logoutBtn.style.display = "none";
+        openMyTripsBtn.style.display = "none";
       }
     }
 
@@ -893,7 +920,14 @@
 
       try {
         const res = await fetch("my_trips.php?action=list");
-        const data = await res.json();
+        const rawText = await res.text();
+        let data;
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          throw new Error(`Server returned HTTP ${res.status} (non-JSON).`);
+        }
+
         if (!res.ok || !data.success) {
           throw new Error(data.error || "Could not load trips");
         }
@@ -1002,7 +1036,6 @@
         tabRegisterBtn.classList.add("secondary");
         authModalHeading.textContent = "Sign In to Your Account";
         submitAuthBtn.textContent = "Login";
-        openMyTripsBtn.style.display = "inline-block";
       } else {
         tabRegisterBtn.classList.remove("secondary");
         tabLoginBtn.classList.add("secondary");
@@ -1031,7 +1064,13 @@
         formData.append("password", authPasswordInput.value);
 
         const res = await fetch("auth.php", { method: "POST", body: formData });
-        const data = await res.json();
+        const rawText = await res.text();
+        let data;
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          throw new Error(`Server returned HTTP ${res.status} (non-JSON).`);
+        }
 
         if (!res.ok || !data.success) {
           throw new Error(data.error || "Authentication failed");
@@ -1052,11 +1091,9 @@
     logoutBtn.addEventListener("click", async () => {
       await fetch("auth.php?action=logout");
       currentUser = null;
-      openMyTripsBtn.style.display = "none";
       updateAuthUI();
     });
 
-    // Require login before opening the Save to Site modal
     openSaveModalBtn.addEventListener("click", () => {
       if (!currentUser) {
         setAuthMode("login");
@@ -1108,7 +1145,13 @@
         }
 
         const res = await fetch("save_trip.php", { method: "POST", body: formData });
-        const data = await res.json();
+        const rawText = await res.text();
+        let data;
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          throw new Error(`Server returned HTTP ${res.status} (non-JSON).`);
+        }
 
         if (!res.ok || !data.success) {
           throw new Error(data.error || "Upload failed");
@@ -1405,7 +1448,7 @@
           </div>
         </div>
         <div style="display: flex; align-items: center; justify-content: flex-end;">
-          ${item.previewUrl ? `<button class="open-tab-btn" title="Open full-size in preview tab">Open</button>` : ""}
+          ${item.previewUrl ? `<button class="open-tab-btn" title="Open full-size in preview window">Open</button>` : ""}
           <button class="remove-item-btn" title="Remove from list">&times;</button>
         </div>
       `;
@@ -1415,36 +1458,17 @@
         openBtn.addEventListener("click", (e) => {
           e.stopPropagation();
           openInSinglePreviewTab(item);
-          previewChannel.onmessage = (event) => {
-            if (!event.data || event.data.type !== "sync_map_pin") return;
-
-            const targetPhoto = geotaggedPhotos.find((p) => p.id === event.data.id);
-            if (!targetPhoto || targetPhoto.enabled === false) return;
-
-            activeMarkers.forEach((m) => {
-              if (m !== targetPhoto.marker && m.getPopup().isOpen()) {
-                m.togglePopup();
-              }
-            });
-
-            map.flyTo({
-              center: [targetPhoto.lon, targetPhoto.lat],
-              zoom: 15.8,
-              pitch: terrain3dCheckbox.checked ? 62 : 0,
-              duration: 1200,
-              essential: true
-            });
-
-            if (targetPhoto.marker && !targetPhoto.marker.getPopup().isOpen()) {
-              targetPhoto.marker.togglePopup();
-            }
-          };
         });
       }
 
       const imgThumb = div.querySelector(".thumbnail-pic");
       if (imgThumb && item.previewUrl) {
         imgThumb.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openInSinglePreviewTab(item);
+        });
+        imgThumb.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
           e.stopPropagation();
           openInSinglePreviewTab(item);
         });
@@ -1560,13 +1584,11 @@
 
         const popupImg = popupEl.querySelector("img");
         if (popupImg) {
-          // Left-click popup photo -> opens/updates single preview window
           popupImg.addEventListener("click", (e) => {
             e.stopPropagation();
             openInSinglePreviewTab(photo);
           });
 
-          // Right-click popup photo -> intercept Chrome's native menu and use single preview window
           popupImg.addEventListener("contextmenu", (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -1707,6 +1729,7 @@
     });
 
     window.addEventListener("DOMContentLoaded", () => {
+      checkSessionStatus();
       const params = new URLSearchParams(window.location.search);
       const kmzParam = params.get("kmz");
       if (kmzParam) {

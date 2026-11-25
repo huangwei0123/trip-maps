@@ -21,11 +21,9 @@ if ($action === 'list') {
             $tripPath = $userRoot . '/' . $slug;
             if (!is_dir($tripPath)) continue;
 
-            // Find any .kmz file inside /trip/<username>/<slug>/
             $kmzFiles = glob($tripPath . '/*.kmz');
             $kmzFile = !empty($kmzFiles) ? basename($kmzFiles[0]) : null;
 
-            // Count saved images in that trip folder
             $images = glob($tripPath . '/*.{jpg,jpeg,png,webp,JPG,JPEG,PNG,WEBP}', GLOB_BRACE);
             $imageCount = is_array($images) ? count($images) : 0;
 
@@ -44,8 +42,10 @@ if ($action === 'list') {
         }
     }
 
-    // Sort newest first
-    usort($trips, fn($a, $b) => $b['timestamp'] <=> $a['timestamp']);
+    usort($trips, function ($a, $b) {
+        return $b['timestamp'] <=> $a['timestamp'];
+    });
+
     echo json_encode(['success' => true, 'username' => $username, 'trips' => $trips]);
     exit;
 }
@@ -62,14 +62,12 @@ if ($action === 'delete') {
     $realUserRoot = realpath($userRoot);
     $realTarget = realpath($targetDir);
 
-    // Ensure the target directory strictly resides inside /trip/<username>/
     if (!$realUserRoot || !$realTarget || strpos($realTarget, $realUserRoot . DIRECTORY_SEPARATOR) !== 0) {
         http_response_code(403);
         echo json_encode(['success' => false, 'error' => 'Access denied.']);
         exit;
     }
 
-    // Remove all files inside /trip/<username>/<slug>/ and then remove the folder
     $files = array_diff(scandir($realTarget), ['.', '..']);
     foreach ($files as $file) {
         @unlink($realTarget . DIRECTORY_SEPARATOR . $file);
