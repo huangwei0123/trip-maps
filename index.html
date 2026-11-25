@@ -501,6 +501,10 @@
       </label>
       <button id="loadDemoBtn" class="secondary">Demo Hike</button>
       <button id="resetViewBtn" class="secondary" disabled>Reset 3D View</button>
+      <span id="userBadge" style="font-size: 0.83rem; font-weight: 600; color: #174ea6; display: none;"></span>
+      <button id="openAuthModalBtn" class="secondary">Login / Register</button>
+      <button id="logoutBtn" class="secondary" style="display: none;">Logout</button>
+      <button id="openMyTripsBtn" class="secondary" style="display: none;">My Trips</button>
       <button id="openSaveModalBtn" class="save-btn" disabled>Save to Site</button>
       <button id="downloadKmzBtn" disabled>Download .KMZ</button>
       <button id="clearBtn" class="secondary" disabled>Clear</button>
@@ -548,23 +552,45 @@
     </div>
   </div>
 
-  <!-- Save Trip modal with individual option buttons -->
-  <div class="modal-backdrop" id="saveModal">
+<!-- Login / Register Modal -->
+  <div class="modal-backdrop" id="authModal">
     <div class="modal-card">
-      <h3>Save Photos & .KMZ to Your Directory</h3>
+      <div style="display: flex; gap: 8px; border-bottom: 1px solid #dadce0; padding-bottom: 10px;">
+        <button id="tabLoginBtn" type="button" style="flex: 1;">Login</button>
+        <button id="tabRegisterBtn" type="button" class="secondary" style="flex: 1;">Register</button>
+      </div>
+
+      <h3 id="authModalHeading">Sign In to Your Account</h3>
       <p style="font-size: 0.82rem; color: #5f6368;">
-        Your photos and .KMZ archive will be stored in <code>/trips/&lt;directory&gt;/</code> on PhotoOnMaps.com with a shareable 3D link.
+        Your saved .KMZ files and photos are stored in your private <code>/trip/&lt;username&gt;/</code> directory.
       </p>
 
       <div class="field-group">
-        <label for="userDirInput">Your Directory Name (Username / Folder)</label>
-        <input type="text" id="userDirInput" placeholder="e.g. weihuang" />
+        <label for="authUsernameInput">Username (letters, numbers, _ or -)</label>
+        <input type="text" id="authUsernameInput" placeholder="e.g. weihuang" autocomplete="username" />
       </div>
 
       <div class="field-group">
-        <label for="dirPasscodeInput">Directory Passcode (Protects your folder)</label>
-        <input type="password" id="dirPasscodeInput" placeholder="Choose a passcode for this directory" />
+        <label for="authPasswordInput">Password (min 6 characters)</label>
+        <input type="password" id="authPasswordInput" placeholder="Enter password" autocomplete="current-password" />
       </div>
+
+      <p id="authErrorMsg" style="color: #d93025; font-size: 0.82rem; display: none;"></p>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+        <button id="closeAuthModalBtn" class="secondary" type="button">Cancel</button>
+        <button id="submitAuthBtn" class="save-btn" type="button">Login</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save Trip Modal (Locked to Logged-In User's /trip/<username>/ Directory) -->
+  <div class="modal-backdrop" id="saveModal">
+    <div class="modal-card">
+      <h3>Save to Your Directory</h3>
+      <p style="font-size: 0.82rem; color: #5f6368;">
+        Destination folder: <code id="lockedDirDisplay">/trip/username/</code>
+      </p>
 
       <div class="field-group">
         <label for="tripNameInput">Trip Name</label>
@@ -584,6 +610,24 @@
         <button id="closeSaveModalBtn" class="secondary" type="button">Close</button>
         <button id="saveImagesOnlyBtn" class="secondary" type="button">Save Images</button>
         <button id="saveKmzOnlyBtn" class="save-btn" type="button">Save .KMZ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- My Trips Modal -->
+  <div class="modal-backdrop" id="myTripsModal">
+    <div class="modal-card" style="max-width: 520px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3>My Saved Trips (<span id="myTripsDirLabel">/trip/</span>)</h3>
+        <button id="closeMyTripsBtn" class="secondary" type="button" style="padding: 5px 10px;">Close</button>
+      </div>
+
+      <p style="font-size: 0.81rem; color: #5f6368;">
+        Click <b>Load on Map</b> to view any saved trip in 3D, or <b>Delete</b> to free storage space.
+      </p>
+
+      <div id="myTripsList" style="display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto;">
+        <p style="font-size: 0.85rem; color: #5f6368;">Loading trips...</p>
       </div>
     </div>
   </div>
@@ -803,16 +847,237 @@
       setTimeout(() => (copySavedUrlBtn.textContent = "Copy Link"), 2000);
     });
 
-    async function saveToDirectory(saveMode) {
-      const userDir = userDirInput.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
-      const passcode = dirPasscodeInput.value.trim();
-      const tripSlug = tripNameInput.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-") || `trip-${Date.now()}`;
+    let currentUser = null;
+    let authMode = "login"; // 'login' or 'register'
 
-      if (!userDir || !passcode) {
-        alert("Please enter both a Directory Name and a Passcode.");
+    const userBadge = document.getElementById("userBadge");
+    const openAuthModalBtn = document.getElementById("openAuthModalBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const authModal = document.getElementById("authModal");
+    const tabLoginBtn = document.getElementById("tabLoginBtn");
+    const tabRegisterBtn = document.getElementById("tabRegisterBtn");
+    const authModalHeading = document.getElementById("authModalHeading");
+    const authUsernameInput = document.getElementById("authUsernameInput");
+    const authPasswordInput = document.getElementById("authPasswordInput");
+    const authErrorMsg = document.getElementById("authErrorMsg");
+    const closeAuthModalBtn = document.getElementById("closeAuthModalBtn");
+    const submitAuthBtn = document.getElementById("submitAuthBtn");
+    const lockedDirDisplay = document.getElementById("lockedDirDisplay");
+    const openMyTripsBtn = document.getElementById("openMyTripsBtn");
+
+    function updateAuthUI() {
+      if (currentUser) {
+        userBadge.textContent = `/trip/${currentUser}/`;
+        userBadge.style.display = "inline";
+        openAuthModalBtn.style.display = "none";
+        logoutBtn.style.display = "inline-block";
+        lockedDirDisplay.textContent = `/trip/${currentUser}/`;
+      } else {
+        userBadge.style.display = "none";
+        openAuthModalBtn.style.display = "inline-block";
+        logoutBtn.style.display = "none";
+      }
+    }
+
+    const myTripsModal = document.getElementById("myTripsModal");
+    const closeMyTripsBtn = document.getElementById("closeMyTripsBtn");
+    const myTripsDirLabel = document.getElementById("myTripsDirLabel");
+    const myTripsList = document.getElementById("myTripsList");
+
+    closeMyTripsBtn.addEventListener("click", () => myTripsModal.classList.remove("open"));
+
+    async function fetchAndRenderMyTrips() {
+      if (!currentUser) return;
+      myTripsDirLabel.textContent = `/trip/${currentUser}/`;
+      myTripsList.innerHTML = `<p style="font-size: 0.85rem; color: #5f6368;">Loading saved trips...</p>`;
+
+      try {
+        const res = await fetch("my_trips.php?action=list");
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "Could not load trips");
+        }
+
+        if (!data.trips.length) {
+          myTripsList.innerHTML = `<p style="font-size: 0.85rem; color: #5f6368; padding: 12px 0;">No trips saved yet in <code>/trip/${escapeHtml(currentUser)}/</code>. Upload photos and click <b>Save to Site</b> to store your first trip.</p>`;
+          return;
+        }
+
+        myTripsList.innerHTML = "";
+        data.trips.forEach((trip) => {
+          const row = document.createElement("div");
+          row.style.cssText =
+            "display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 12px; border:1px solid #dadce0; border-radius:8px; background:#fafafa;";
+
+          const infoDiv = document.createElement("div");
+          infoDiv.style.cssText = "min-width:0; flex:1;";
+          infoDiv.innerHTML = `
+            <div style="font-weight:600; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              ${escapeHtml(trip.slug)}
+            </div>
+            <div style="font-size:0.76rem; color:#5f6368; margin-top:2px;">
+              ${trip.kmz_path ? `${trip.size_kb} KB .KMZ` : "Images only"}
+              ${trip.image_count > 0 ? ` • ${trip.image_count} image(s)` : ""}
+              • ${escapeHtml(trip.updated_at)}
+            </div>
+          `;
+
+          const btnGroup = document.createElement("div");
+          btnGroup.style.cssText = "display:flex; gap:6px; align-items:center;";
+
+          if (trip.kmz_path) {
+            const loadBtn = document.createElement("button");
+            loadBtn.type = "button";
+            loadBtn.textContent = "Load on Map";
+            loadBtn.style.cssText = "padding:6px 10px; font-size:0.8rem;";
+            loadBtn.addEventListener("click", () => {
+              myTripsModal.classList.remove("open");
+              kmzUrlInput.value = trip.kmz_path;
+              loadKmzFromUrl(trip.kmz_path, true);
+            });
+            btnGroup.appendChild(loadBtn);
+          }
+
+          const delBtn = document.createElement("button");
+          delBtn.type = "button";
+          delBtn.className = "secondary";
+          delBtn.textContent = "Delete";
+          delBtn.style.cssText = "padding:6px 10px; font-size:0.8rem; color:#d93025; border-color:#f5c2c7;";
+          delBtn.addEventListener("click", async () => {
+            if (!confirm(`Delete "${trip.slug}" permanently from /trip/${currentUser}/?`)) return;
+            delBtn.disabled = true;
+            delBtn.textContent = "Deleting...";
+            try {
+              const formData = new FormData();
+              formData.append("action", "delete");
+              formData.append("slug", trip.slug);
+              const delRes = await fetch("my_trips.php", { method: "POST", body: formData });
+              const delData = await delRes.json();
+              if (!delRes.ok || !delData.success) {
+                throw new Error(delData.error || "Delete failed");
+              }
+              row.remove();
+              if (!myTripsList.children.length) {
+                fetchAndRenderMyTrips();
+              }
+            } catch (err) {
+              alert(`Error: ${err.message}`);
+              delBtn.disabled = false;
+              delBtn.textContent = "Delete";
+            }
+          });
+          btnGroup.appendChild(delBtn);
+
+          row.appendChild(infoDiv);
+          row.appendChild(btnGroup);
+          myTripsList.appendChild(row);
+        });
+      } catch (err) {
+        myTripsList.innerHTML = `<p style="color:#d93025; font-size:0.84rem;">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    openMyTripsBtn.addEventListener("click", () => {
+      if (!currentUser) return;
+      myTripsModal.classList.add("open");
+      fetchAndRenderMyTrips();
+    });
+
+    async function checkSessionStatus() {
+      try {
+        const res = await fetch("auth.php?action=status");
+        const data = await res.json();
+        currentUser = data.logged_in ? data.username : null;
+        updateAuthUI();
+      } catch (err) {
+        console.warn("Auth status check failed:", err);
+      }
+    }
+
+    function setAuthMode(mode) {
+      authMode = mode;
+      authErrorMsg.style.display = "none";
+      if (mode === "login") {
+        tabLoginBtn.classList.remove("secondary");
+        tabRegisterBtn.classList.add("secondary");
+        authModalHeading.textContent = "Sign In to Your Account";
+        submitAuthBtn.textContent = "Login";
+        openMyTripsBtn.style.display = "inline-block";
+      } else {
+        tabRegisterBtn.classList.remove("secondary");
+        tabLoginBtn.classList.add("secondary");
+        authModalHeading.textContent = "Create a New Account";
+        submitAuthBtn.textContent = "Register";
+      }
+    }
+
+    tabLoginBtn.addEventListener("click", () => setAuthMode("login"));
+    tabRegisterBtn.addEventListener("click", () => setAuthMode("register"));
+
+    openAuthModalBtn.addEventListener("click", () => {
+      setAuthMode("login");
+      authModal.classList.add("open");
+    });
+    closeAuthModalBtn.addEventListener("click", () => authModal.classList.remove("open"));
+
+    submitAuthBtn.addEventListener("click", async () => {
+      authErrorMsg.style.display = "none";
+      submitAuthBtn.disabled = true;
+
+      try {
+        const formData = new FormData();
+        formData.append("action", authMode);
+        formData.append("username", authUsernameInput.value.trim());
+        formData.append("password", authPasswordInput.value);
+
+        const res = await fetch("auth.php", { method: "POST", body: formData });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "Authentication failed");
+        }
+
+        currentUser = data.username;
+        authPasswordInput.value = "";
+        authModal.classList.remove("open");
+        updateAuthUI();
+      } catch (err) {
+        authErrorMsg.textContent = err.message;
+        authErrorMsg.style.display = "block";
+      } finally {
+        submitAuthBtn.disabled = false;
+      }
+    });
+
+    logoutBtn.addEventListener("click", async () => {
+      await fetch("auth.php?action=logout");
+      currentUser = null;
+      openMyTripsBtn.style.display = "none";
+      updateAuthUI();
+    });
+
+    // Require login before opening the Save to Site modal
+    openSaveModalBtn.addEventListener("click", () => {
+      if (!currentUser) {
+        setAuthMode("login");
+        authModal.classList.add("open");
+        return;
+      }
+      shareResultBox.style.display = "none";
+      lockedDirDisplay.textContent = `/trip/${currentUser}/`;
+      saveModal.classList.add("open");
+    });
+
+    async function saveToDirectory(saveMode) {
+      if (!currentUser) {
+        saveModal.classList.remove("open");
+        setAuthMode("login");
+        authModal.classList.add("open");
         return;
       }
 
+      const tripSlug =
+        tripNameInput.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-") || `trip-${Date.now()}`;
       const active = getActivePhotos();
       if (!active.length) return;
 
@@ -824,8 +1089,6 @@
 
       try {
         const formData = new FormData();
-        formData.append("user_dir", userDir);
-        formData.append("passcode", passcode);
         formData.append("trip_slug", tripSlug);
         formData.append("save_mode", saveMode);
 
@@ -841,19 +1104,14 @@
               attached++;
             }
           });
-          if (attached === 0) {
-            throw new Error("No image blobs available to upload.");
-          }
+          if (attached === 0) throw new Error("No image blobs available to upload.");
         }
 
-        const res = await fetch("save_trip.php", {
-          method: "POST",
-          body: formData,
-        });
+        const res = await fetch("save_trip.php", { method: "POST", body: formData });
         const data = await res.json();
 
         if (!res.ok || !data.success) {
-          throw new Error(data.error || "Server rejected upload");
+          throw new Error(data.error || "Upload failed");
         }
 
         shareResultBox.style.display = "flex";
@@ -863,16 +1121,12 @@
           const fullShareUrl = `${window.location.origin}/?kmz=${encodeURIComponent(data.kmz_path)}`;
           statusHeader.textContent = "Saved .KMZ! Share this 3D Map Link:";
           generatedShareUrl.value = fullShareUrl;
-          generatedShareUrl.style.display = "block";
-          copySavedUrlBtn.style.display = "inline-block";
           downloadHostedKmzLink.href = data.kmz_path;
           downloadHostedKmzLink.style.display = "inline";
           window.history.replaceState({}, "", `/?kmz=${encodeURIComponent(data.kmz_path)}`);
         } else {
-          statusHeader.textContent = `Saved ${data.saved_photos.length} image(s) to /trips/${userDir}/${tripSlug}/`;
-          generatedShareUrl.value = `${window.location.origin}/trips/${userDir}/${tripSlug}/`;
-          generatedShareUrl.style.display = "block";
-          copySavedUrlBtn.style.display = "inline-block";
+          statusHeader.textContent = `Saved ${data.saved_photos.length} image(s) to /trip/${currentUser}/${tripSlug}/`;
+          generatedShareUrl.value = `${window.location.origin}/trip/${currentUser}/${tripSlug}/`;
           downloadHostedKmzLink.style.display = "none";
         }
       } catch (err) {
@@ -1161,6 +1415,30 @@
         openBtn.addEventListener("click", (e) => {
           e.stopPropagation();
           openInSinglePreviewTab(item);
+          previewChannel.onmessage = (event) => {
+            if (!event.data || event.data.type !== "sync_map_pin") return;
+
+            const targetPhoto = geotaggedPhotos.find((p) => p.id === event.data.id);
+            if (!targetPhoto || targetPhoto.enabled === false) return;
+
+            activeMarkers.forEach((m) => {
+              if (m !== targetPhoto.marker && m.getPopup().isOpen()) {
+                m.togglePopup();
+              }
+            });
+
+            map.flyTo({
+              center: [targetPhoto.lon, targetPhoto.lat],
+              zoom: 15.8,
+              pitch: terrain3dCheckbox.checked ? 62 : 0,
+              duration: 1200,
+              essential: true
+            });
+
+            if (targetPhoto.marker && !targetPhoto.marker.getPopup().isOpen()) {
+              targetPhoto.marker.togglePopup();
+            }
+          };
         });
       }
 

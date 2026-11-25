@@ -163,9 +163,11 @@
     <button class="side-arrow next" id="sideNextBtn" title="Next photo">&rsaquo;</button>
   </div>
 
-  <script>
+<script>
     let playlist = [];
     let currentIndex = 0;
+
+    const channel = new BroadcastChannel("photoonmaps_preview_channel");
 
     const photoTitle = document.getElementById("photoTitle");
     const photoCounter = document.getElementById("photoCounter");
@@ -177,7 +179,7 @@
     const sidePrevBtn = document.getElementById("sidePrevBtn");
     const sideNextBtn = document.getElementById("sideNextBtn");
 
-    function renderCurrentPhoto() {
+    function renderCurrentPhoto(notifyMap = false) {
       if (!playlist.length) return;
       if (currentIndex < 0) currentIndex = 0;
       if (currentIndex >= playlist.length) currentIndex = playlist.length - 1;
@@ -198,13 +200,18 @@
       sidePrevBtn.disabled = isFirst;
       nextBtn.disabled = isLast;
       sideNextBtn.disabled = isLast;
+
+      // Tell the main 3D map tab to fly to this photo's pin
+      if (notifyMap && item.id) {
+        channel.postMessage({ type: "sync_map_pin", id: item.id });
+      }
     }
 
     function stepPhoto(delta) {
       const nextIdx = currentIndex + delta;
       if (nextIdx >= 0 && nextIdx < playlist.length) {
         currentIndex = nextIdx;
-        renderCurrentPhoto();
+        renderCurrentPhoto(true);
       }
     }
 
@@ -228,11 +235,11 @@
       if (Array.isArray(data.items) && data.items.length > 0) {
         playlist = data.items;
         currentIndex = typeof data.index === "number" ? data.index : 0;
-        renderCurrentPhoto();
+        renderCurrentPhoto(false);
       } else if (data.url) {
         playlist = [data];
         currentIndex = 0;
-        renderCurrentPhoto();
+        renderCurrentPhoto(false);
       }
     }
 
@@ -245,8 +252,8 @@
       }
     }
 
-    const channel = new BroadcastChannel("photoonmaps_preview_channel");
     channel.onmessage = (event) => {
+      if (event.data && event.data.type === "sync_map_pin") return;
       applyPayload(event.data);
     };
   </script>
