@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $userDir = preg_replace('/[^a-z0-9_-]/', '', strtolower($_POST['user_dir'] ?? ''));
 $passcode = trim($_POST['passcode'] ?? '');
 $tripSlug = preg_replace('/[^a-z0-9_-]/', '-', strtolower($_POST['trip_slug'] ?? 'trip-' . time()));
+$saveMode = $_POST['save_mode'] ?? 'kmz_only'; // 'kmz_only' or 'images_only'
 
 if (strlen($userDir) < 2 || strlen($passcode) < 4) {
     http_response_code(400);
@@ -28,7 +29,6 @@ if (!is_dir($baseDir)) {
         exit;
     }
     file_put_contents($passHashFile, password_hash($passcode, PASSWORD_DEFAULT));
-    // Prevent directory listing in browser
     file_put_contents($baseDir . '/index.html', '<!doctype html><title>Private Directory</title>');
 } else {
     if (!file_exists($passHashFile) || !password_verify($passcode, trim(file_get_contents($passHashFile)))) {
@@ -43,24 +43,35 @@ if (!is_dir($tripDir)) {
     mkdir($tripDir, 0755, true);
 }
 
-// 1. Save the .KMZ file
-if (!isset($_FILES['kmz_file']) || $_FILES['kmz_file']['error'] !== UPLOAD_ERR_OK) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'error' => 'Missing or invalid KMZ upload.']);
-    exit;
-}
-
-$kmzFilename = $tripSlug . '.kmz';
-$kmzDest = $tripDir . '/' . $kmzFilename;
-if (!move_uploaded_file($_FILES['kmz_file']['tmp_name'], $kmzDest)) {
-    http_response_code(500);
-    echo json_encode(['success' => false, 'error' => 'Failed to save KMZ file.']);
-    exit;
-}
-
-// 2. Save individual JPEG photos into the user's trip directory
+$relativeKmzPath = null;
 $savedPhotos = [];
-if (isset($_FILES['photos']) && is_array($_FILES['photos']['name'])) {
+
+// Mode 1: Save .KMZ file
+if ($saveMode === 'kmz_only') {
+    if (!isset($_FILES['kmz_file']) || $_FILES['kmz_file']['error'] !== UPLOAD_ERR_OK) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Missing or invalid KMZ upload.']);
+        exit;
+    }
+
+    $kmzFilename = $tripSlug . '.kmz';
+    $kmzDest = $tripDir . '/' . $kmzFilename;
+    if (!move_uploaded_file($_FILES['kmz_file']['tmp_name'], $kmzDest)) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Failed to save KMZ file.']);
+        exit;
+    }
+    $relativeKmzPath = "trips/$userDir/$tripSlug/$kmzFilename";
+}
+
+// Mode 2: Save individual JPEG photos
+if ($saveMode === 'images_only') {
+    if (!isset($_FILES['photos']) || !is_array($_FILES['photos']['name'])) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'No image files received.']);
+        exit;
+    }
+
     $count = count($_FILES['photos']['name']);
     for ($i = 0; $i < $count; $i++) {
         if ($_FILES['photos']['error'][$i] === UPLOAD_ERR_OK) {
@@ -77,10 +88,9 @@ if (isset($_FILES['photos']) && is_array($_FILES['photos']['name'])) {
     }
 }
 
-$relativeKmzPath = "trips/$userDir/$tripSlug/$kmzFilename";
-
 echo json_encode([
     'success' => true,
+    'save_mode' => $saveMode,
     'kmz_path' => $relativeKmzPath,
     'saved_photos' => $savedPhotos
 ]);

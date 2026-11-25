@@ -293,7 +293,7 @@
       padding: 3px 8px;
       cursor: pointer;
       margin-right: 6px;
-      opacity: 0.8;
+      opacity: 0.85;
       transition: opacity 0.15s, background 0.15s;
     }
 
@@ -394,7 +394,6 @@
       display: block;
     }
 
-    /* Modal Styling */
     .modal-backdrop {
       position: fixed;
       inset: 0;
@@ -644,6 +643,8 @@
     let mapReady = false;
     let activeMarkers = [];
     let geotaggedPhotos = [];
+    let previewWindow = null;
+    const previewChannel = new BroadcastChannel("photoonmaps_preview_channel");
 
     map.on("load", () => {
       mapReady = true;
@@ -691,7 +692,6 @@
     const connectPathCheckbox = document.getElementById("connectPathCheckbox");
     const terrain3dCheckbox = document.getElementById("terrain3dCheckbox");
 
-    // Modal Elements
     const saveModal = document.getElementById("saveModal");
     const closeSaveModalBtn = document.getElementById("closeSaveModalBtn");
     const saveKmzOnlyBtn = document.getElementById("saveKmzOnlyBtn");
@@ -704,11 +704,9 @@
     const copySavedUrlBtn = document.getElementById("copySavedUrlBtn");
     const downloadHostedKmzLink = document.getElementById("downloadHostedKmzLink");
 
-    let previewWindow = null;
-    const previewChannel = new BroadcastChannel("photoonmaps_preview_channel");
-
-    let previewWindow = null;
-    const previewChannel = new BroadcastChannel("photoonmaps_preview_channel");
+    function getActivePhotos() {
+      return geotaggedPhotos.filter((p) => p.enabled !== false);
+    }
 
     function buildPreviewPayload(selectedItem) {
       const visibleItems = getActivePhotos().filter((p) => p.previewUrl);
@@ -720,7 +718,6 @@
 
       let idx = visibleItems.findIndex((p) => p.id === selectedItem.id);
       if (idx === -1) {
-        // Fallback if user clicked a non-GPS photo that has a previewUrl
         items.unshift({
           url: selectedItem.previewUrl,
           name: selectedItem.name,
@@ -745,9 +742,6 @@
       const viewerUrl = `viewer.html#${encodeURIComponent(JSON.stringify(payload))}`;
       previewWindow = window.open(viewerUrl, "photoonmaps_view");
       if (previewWindow) previewWindow.focus();
-    }
-    function getActivePhotos() {
-      return geotaggedPhotos.filter((p) => p.enabled !== false);
     }
 
     dropzone.addEventListener("click", () => fileInput.click());
@@ -798,7 +792,6 @@
 
     clearBtn.addEventListener("click", () => resetWorkspace(true));
 
-    // Modal Events
     openSaveModalBtn.addEventListener("click", () => {
       shareResultBox.style.display = "none";
       saveModal.classList.add("open");
@@ -1167,7 +1160,7 @@
       if (openBtn) {
         openBtn.addEventListener("click", (e) => {
           e.stopPropagation();
-          openInSinglePreviewTab(item, hasGps);
+          openInSinglePreviewTab(item);
         });
       }
 
@@ -1175,7 +1168,7 @@
       if (imgThumb && item.previewUrl) {
         imgThumb.addEventListener("click", (e) => {
           e.stopPropagation();
-          openInSinglePreviewTab(item, hasGps);
+          openInSinglePreviewTab(item);
         });
       }
 
@@ -1275,17 +1268,35 @@
         el.className = "photo-pin";
         el.title = photo.name;
 
-        const imgTag = photo.previewUrl
-          ? `<img src="${photo.previewUrl}" alt="${escapeHtml(photo.name)}" />`
-          : "";
+        const popupEl = document.createElement("div");
+        popupEl.className = "popup-card";
+        popupEl.innerHTML = `
+          ${
+            photo.previewUrl
+              ? `<img src="${photo.previewUrl}" alt="${escapeHtml(photo.name)}" style="cursor:pointer;" title="Click to open full-size in preview window" />`
+              : ""
+          }
+          <strong>${escapeHtml(photo.name)}</strong>
+          <small>${escapeHtml(photo.dateStr)}</small>
+        `;
 
-        const popup = new maplibregl.Popup({ offset: 22, maxWidth: "275px" }).setHTML(`
-          <div class="popup-card">
-            ${imgTag}
-            <strong>${escapeHtml(photo.name)}</strong>
-            <small>${escapeHtml(photo.dateStr)}</small>
-          </div>
-        `);
+        const popupImg = popupEl.querySelector("img");
+        if (popupImg) {
+          // Left-click popup photo -> opens/updates single preview window
+          popupImg.addEventListener("click", (e) => {
+            e.stopPropagation();
+            openInSinglePreviewTab(photo);
+          });
+
+          // Right-click popup photo -> intercept Chrome's native menu and use single preview window
+          popupImg.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openInSinglePreviewTab(photo);
+          });
+        }
+
+        const popup = new maplibregl.Popup({ offset: 22, maxWidth: "275px" }).setDOMContent(popupEl);
 
         const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
           .setLngLat([photo.lon, photo.lat])

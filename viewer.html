@@ -112,7 +112,6 @@
       box-shadow: 0 10px 35px rgba(0, 0, 0, 0.65);
     }
 
-    /* Floating Side Arrow Buttons */
     .side-arrow {
       position: absolute;
       top: 50%;
@@ -214,7 +213,6 @@
     nextBtn.addEventListener("click", () => stepPhoto(1));
     sideNextBtn.addEventListener("click", () => stepPhoto(1));
 
-    // Left / Right keyboard arrow support
     window.addEventListener("keydown", (e) => {
       if (e.key === "ArrowLeft") {
         e.preventDefault();
@@ -238,7 +236,6 @@
       }
     }
 
-    // 1. Load initial playlist & selected index from URL hash on first open
     if (window.location.hash.length > 1) {
       try {
         const initial = JSON.parse(decodeURIComponent(window.location.hash.slice(1)));
@@ -248,7 +245,6 @@
       }
     }
 
-    // 2. Receive updates when user clicks another thumbnail or loads a new trip in main tab
     const channel = new BroadcastChannel("photoonmaps_preview_channel");
     channel.onmessage = (event) => {
       applyPayload(event.data);
