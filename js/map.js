@@ -1,6 +1,6 @@
 import { escapeHtml } from "./kmz.js";
 
-export function createMapController({ onPhotoPreview }) {
+export function createMapController({ onPhotoPreview, onPinSelect }) {
   let mapReady = false;
   let activeMarkers = [];
 
@@ -105,6 +105,8 @@ export function createMapController({ onPhotoPreview }) {
 
     if (photo.marker && !photo.marker.getPopup().isOpen()) {
       photo.marker.togglePopup();
+    } else if (onPinSelect) {
+      onPinSelect(photo);
     }
   }
 
@@ -145,6 +147,18 @@ export function createMapController({ onPhotoPreview }) {
       }
 
       const popup = new maplibregl.Popup({ offset: 22, maxWidth: "275px" }).setDOMContent(popupEl);
+
+      popup.on("open", () => {
+        if (onPinSelect) onPinSelect(photo);
+      });
+
+      popup.on("close", () => {
+        const anyStillOpen = activeMarkers.some((m) => m.getPopup() && m.getPopup().isOpen());
+        if (!anyStillOpen && onPinSelect) {
+          onPinSelect(null);
+        }
+      });
+
       const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
         .setLngLat([photo.lon, photo.lat])
         .setPopup(popup)

@@ -1,7 +1,18 @@
 import { buildKmzBlob, escapeHtml } from "./kmz.js";
 
+function emailToFolderSlug(email) {
+  return String(email || "")
+    .trim()
+    .toLowerCase()
+    .replace(/@/g, "_at_")
+    .replace(/[^a-z0-9_-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoadSavedKmz }) {
   let currentUser = null;
+  let currentFolderSlug = null;
   let authMode = "login";
 
   const userBadge = document.getElementById("userBadge");
@@ -19,6 +30,12 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
   const authErrorMsg = document.getElementById("authErrorMsg");
   const closeAuthModalBtn = document.getElementById("closeAuthModalBtn");
   const submitAuthBtn = document.getElementById("submitAuthBtn");
+
+  if (authUsernameInput) {
+    authUsernameInput.type = "email";
+    authUsernameInput.autocomplete = "email";
+    authUsernameInput.placeholder = "you@example.com";
+  }
 
   const saveModal = document.getElementById("saveModal");
   const closeSaveModalBtn = document.getElementById("closeSaveModalBtn");
@@ -38,12 +55,14 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
   function updateAuthUI() {
     if (currentUser) {
-      userBadge.textContent = `/trip/${currentUser}/`;
+      const folder = currentFolderSlug || emailToFolderSlug(currentUser);
+      userBadge.textContent = currentUser;
+      userBadge.title = `Storage directory: /trip/${folder}/`;
       userBadge.style.display = "inline";
       openAuthModalBtn.style.display = "none";
       logoutBtn.style.display = "inline-block";
       openMyTripsBtn.style.display = "inline-block";
-      lockedDirDisplay.textContent = `/trip/${currentUser}/`;
+      lockedDirDisplay.textContent = `/trip/${folder}/`;
     } else {
       userBadge.style.display = "none";
       openAuthModalBtn.style.display = "inline-block";
@@ -58,12 +77,12 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
     if (mode === "login") {
       tabLoginBtn.classList.remove("secondary");
       tabRegisterBtn.classList.add("secondary");
-      authModalHeading.textContent = "Sign In to Your Account";
+      authModalHeading.textContent = "Sign In with Your Email";
       submitAuthBtn.textContent = "Login";
     } else {
       tabRegisterBtn.classList.remove("secondary");
       tabLoginBtn.classList.add("secondary");
-      authModalHeading.textContent = "Create a New Account";
+      authModalHeading.textContent = "Register with Your Email";
       submitAuthBtn.textContent = "Register";
     }
   }
@@ -72,7 +91,13 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
     try {
       const res = await fetch("auth.php?action=status");
       const data = await res.json();
-      currentUser = data.logged_in ? data.username : null;
+      if (data.logged_in) {
+        currentUser = data.username;
+        currentFolderSlug = data.folder_slug || emailToFolderSlug(data.username);
+      } else {
+        currentUser = null;
+        currentFolderSlug = null;
+      }
       updateAuthUI();
     } catch (err) {
       console.warn("Auth status check failed:", err);
@@ -90,12 +115,20 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
   submitAuthBtn.addEventListener("click", async () => {
     authErrorMsg.style.display = "none";
+    const emailVal = authUsernameInput.value.trim().toLowerCase();
+
+    if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+      authErrorMsg.textContent = "Please enter a valid email address.";
+      authErrorMsg.style.display = "block";
+      return;
+    }
+
     submitAuthBtn.disabled = true;
 
     try {
       const formData = new FormData();
       formData.append("action", authMode);
-      formData.append("username", authUsernameInput.value.trim());
+      formData.append("username", emailVal);
       formData.append("password", authPasswordInput.value);
 
       const res = await fetch("auth.php", { method: "POST", body: formData });
@@ -112,6 +145,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
       }
 
       currentUser = data.username;
+      currentFolderSlug = data.folder_slug || emailToFolderSlug(data.username);
       authPasswordInput.value = "";
       authModal.classList.remove("open");
       updateAuthUI();
@@ -126,6 +160,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
   logoutBtn.addEventListener("click", async () => {
     await fetch("auth.php?action=logout");
     currentUser = null;
+    currentFolderSlug = null;
     updateAuthUI();
   });
 
@@ -135,8 +170,9 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
       authModal.classList.add("open");
       return;
     }
+    const folder = currentFolderSlug || emailToFolderSlug(currentUser);
     shareResultBox.style.display = "none";
-    lockedDirDisplay.textContent = `/trip/${currentUser}/`;
+    lockedDirDisplay.textContent = `/trip/${folder}/`;
     saveModal.classList.add("open");
   });
 
@@ -199,6 +235,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
         throw new Error(data.error || "Upload failed");
       }
 
+      const folder = data.folder_slug || currentFolderSlug || emailToFolderSlug(currentUser);
       shareResultBox.style.display = "flex";
       const statusHeader = shareResultBox.querySelector("strong");
 
@@ -210,8 +247,8 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
         downloadHostedKmzLink.style.display = "inline";
         window.history.replaceState({}, "", `/?kmz=${encodeURIComponent(data.kmz_path)}`);
       } else {
-        statusHeader.textContent = `Saved ${data.saved_photos.length} image(s) to /trip/${currentUser}/${tripSlug}/`;
-        generatedShareUrl.value = `${window.location.origin}/trip/${currentUser}/${tripSlug}/`;
+        statusHeader.textContent = `Saved ${data.saved_photos.length} image(s) to /trip/${folder}/${tripSlug}/`;
+        generatedShareUrl.value = `${window.location.origin}/trip/${folder}/${tripSlug}/`;
         downloadHostedKmzLink.style.display = "none";
       }
     } catch (err) {
@@ -230,7 +267,8 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
   async function fetchAndRenderMyTrips() {
     if (!currentUser) return;
-    myTripsDirLabel.textContent = `/trip/${currentUser}/`;
+    const folder = currentFolderSlug || emailToFolderSlug(currentUser);
+    myTripsDirLabel.textContent = `/trip/${folder}/`;
     myTripsList.innerHTML = `<p style="font-size: 0.85rem; color: #5f6368;">Loading saved trips...</p>`;
 
     try {
@@ -248,7 +286,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
       }
 
       if (!data.trips.length) {
-        myTripsList.innerHTML = `<p style="font-size: 0.85rem; color: #5f6368; padding: 12px 0;">No trips saved yet in <code>/trip/${escapeHtml(currentUser)}/</code>. Upload photos and click <b>Save to Site</b> to store your first trip.</p>`;
+        myTripsList.innerHTML = `<p style="font-size: 0.85rem; color: #5f6368; padding: 12px 0;">No trips saved yet in <code>/trip/${escapeHtml(folder)}/</code>. Upload photos and click <b>Save to Site</b> to store your first trip.</p>`;
         return;
       }
 
@@ -292,7 +330,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
         delBtn.textContent = "Delete";
         delBtn.style.cssText = "padding:6px 10px; font-size:0.8rem; color:#d93025; border-color:#f5c2c7;";
         delBtn.addEventListener("click", async () => {
-          if (!confirm(`Delete "${trip.slug}" permanently from /trip/${currentUser}/?`)) return;
+          if (!confirm(`Delete "${trip.slug}" permanently from /trip/${folder}/?`)) return;
           delBtn.disabled = true;
           delBtn.textContent = "Deleting...";
           try {

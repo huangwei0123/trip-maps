@@ -36,6 +36,20 @@ function getActivePhotos() {
   return geotaggedPhotos.filter((p) => p.enabled !== false);
 }
 
+function highlightSidebarItem(photoId) {
+  document.querySelectorAll(".photo-item.active").forEach((el) => {
+    el.classList.remove("active");
+  });
+
+  if (!photoId) return;
+
+  const target = photoList.querySelector(`.photo-item[data-photo-id="${CSS.escape(photoId)}"]`);
+  if (target) {
+    target.classList.add("active");
+    target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
 function buildPreviewPayload(selectedItem) {
   const visibleItems = getActivePhotos().filter((p) => p.previewUrl);
   const items = visibleItems.map((p) => ({
@@ -79,7 +93,10 @@ function openInSinglePreviewTab(item) {
 }
 
 const mapCtrl = createMapController({
-  onPhotoPreview: openInSinglePreviewTab
+  onPhotoPreview: openInSinglePreviewTab,
+  onPinSelect: (photo) => {
+    highlightSidebarItem(photo ? photo.id : null);
+  }
 });
 
 mapCtrl.onLoad(() => {
@@ -95,7 +112,10 @@ mapCtrl.onLoad(() => {
 previewChannel.onmessage = (event) => {
   if (!event.data || event.data.type !== "sync_map_pin") return;
   const targetPhoto = geotaggedPhotos.find((p) => p.id === event.data.id);
-  mapCtrl.flyToPhoto(targetPhoto, terrain3dCheckbox.checked, 1200);
+  if (targetPhoto) {
+    highlightSidebarItem(targetPhoto.id);
+    mapCtrl.flyToPhoto(targetPhoto, terrain3dCheckbox.checked, 1200);
+  }
 };
 
 function updateNoGpsButton() {
@@ -113,6 +133,7 @@ function updateUI() {
 }
 
 function refreshOverlays(autoOpenPhotoName = null) {
+  highlightSidebarItem(null);
   mapCtrl.renderOverlays(getActivePhotos(), {
     connectPath: connectPathCheckbox.checked,
     use3d: terrain3dCheckbox.checked,
@@ -142,9 +163,13 @@ function resetWorkspace(clearQueryParam = false) {
 function appendSidebarItem(item, hasGps) {
   const div = document.createElement("div");
   div.className = `photo-item ${hasGps ? "" : "no-gps"}`;
+  if (item.id) {
+    div.dataset.photoId = item.id;
+  }
+
   const thumbHtml = item.previewUrl
-    ? `<img src="${item.previewUrl}" alt="" class="thumbnail-pic" />`
-    : `<div style="width:48px;height:48px;border-radius:6px;background:#e8eaed;display:flex;align-items:center;justify-content:center;font-size:18px;">📍</div>`;
+    ? `<img src="${item.previewUrl}" alt="${escapeHtml(item.name)}" class="thumbnail-pic" />`
+    : `<div class="thumbnail-placeholder">📍</div>`;
 
   div.innerHTML = `
     ${hasGps ? `<input type="checkbox" class="pin-toggle" checked title="Include in map & KMZ" />` : ""}
@@ -155,7 +180,7 @@ function appendSidebarItem(item, hasGps) {
         ${hasGps ? `${item.lat.toFixed(5)}, ${item.lon.toFixed(5)}` : "No GPS metadata found"}
       </div>
     </div>
-    <div style="display: flex; align-items: center; justify-content: flex-end;">
+    <div class="photo-actions">
       ${item.previewUrl ? `<button class="open-tab-btn" title="Open full-size in preview window">Open</button>` : ""}
       <button class="remove-item-btn" title="Remove from list">&times;</button>
     </div>
@@ -207,6 +232,7 @@ function appendSidebarItem(item, hasGps) {
     });
 
     div.addEventListener("click", () => {
+      highlightSidebarItem(item.id);
       mapCtrl.flyToPhoto(item, terrain3dCheckbox.checked, 1400);
     });
   }
@@ -397,7 +423,16 @@ const account = initAccountSystem({
   }
 });
 
+function configureEmailInputs() {
+  document.querySelectorAll('input[name="username"], #authUsername, #loginUsername').forEach((input) => {
+    input.type = "email";
+    input.autocomplete = "email";
+    input.placeholder = "you@example.com";
+  });
+}
+
 window.addEventListener("DOMContentLoaded", () => {
+  configureEmailInputs();
   account.checkSessionStatus();
   const params = new URLSearchParams(window.location.search);
   const kmzParam = params.get("kmz");

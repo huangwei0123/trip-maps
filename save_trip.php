@@ -2,6 +2,13 @@
 session_start();
 header('Content-Type: application/json');
 
+function emailToFolderSlug(string $email): string {
+    $slug = str_replace('@', '_at_', strtolower(trim($email)));
+    $slug = preg_replace('/[^a-z0-9_-]/', '_', $slug);
+    $slug = preg_replace('/_+/', '_', $slug);
+    return trim($slug, '_');
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     echo json_encode(['success' => false, 'error' => 'Method not allowed']);
@@ -15,13 +22,20 @@ if (empty($_SESSION['username'])) {
     exit;
 }
 
-$username = preg_replace('/[^a-z0-9_-]/', '', strtolower($_SESSION['username']));
+$rawFolder = $_SESSION['folder_slug'] ?? emailToFolderSlug($_SESSION['username']);
+$folderSlug = preg_replace('/[^a-z0-9_-]/', '', strtolower($rawFolder));
+if ($folderSlug === '') {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Invalid user directory identifier.']);
+    exit;
+}
+
 $tripSlug = preg_replace('/[^a-z0-9_-]/', '-', strtolower(trim($_POST['trip_slug'] ?? '')));
 $tripSlug = trim($tripSlug, '-') ?: 'trip-' . time();
 $saveMode = $_POST['save_mode'] ?? 'kmz_only'; // 'kmz_only' or 'images_only'
 
-// Locked strictly to /trip/<username>/<tripSlug>
-$tripDir = __DIR__ . '/trip/' . $username . '/' . $tripSlug;
+// Locked strictly to /trip/<folderSlug>/<tripSlug>
+$tripDir = __DIR__ . '/trip/' . $folderSlug . '/' . $tripSlug;
 if (!is_dir($tripDir)) {
     if (!mkdir($tripDir, 0755, true)) {
         http_response_code(500);
@@ -48,7 +62,7 @@ if ($saveMode === 'kmz_only') {
         echo json_encode(['success' => false, 'error' => 'Failed to write KMZ file.']);
         exit;
     }
-    $relativeKmzPath = "trip/$username/$tripSlug/$kmzFilename";
+    $relativeKmzPath = "trip/$folderSlug/$tripSlug/$kmzFilename";
 }
 
 if ($saveMode === 'images_only') {
@@ -67,7 +81,7 @@ if ($saveMode === 'images_only') {
                 $safePhoto = preg_replace('/[^a-zA-Z0-9._-]/', '_', $origName);
                 $photoDest = $tripDir . '/' . $safePhoto;
                 if (move_uploaded_file($_FILES['photos']['tmp_name'][$i], $photoDest)) {
-                    $savedPhotos[] = "trip/$username/$tripSlug/$safePhoto";
+                    $savedPhotos[] = "trip/$folderSlug/$tripSlug/$safePhoto";
                 }
             }
         }
@@ -76,7 +90,8 @@ if ($saveMode === 'images_only') {
 
 echo json_encode([
     'success' => true,
-    'username' => $username,
+    'username' => $_SESSION['username'],
+    'folder_slug' => $folderSlug,
     'save_mode' => $saveMode,
     'kmz_path' => $relativeKmzPath,
     'saved_photos' => $savedPhotos
