@@ -1,41 +1,40 @@
 import { buildKmzBlob, escapeHtml } from "./kmz.js";
 
-function emailToFolderSlug(email) {
-  return String(email || "")
-    .trim()
-    .toLowerCase()
-    .replace(/@/g, "_at_")
-    .replace(/[^a-z0-9_-]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
 export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoadSavedKmz }) {
   let currentUser = null;
-  let currentFolderSlug = null;
-  let authMode = "login";
+  let authMode = "login"; // 'login' | 'register' | 'reset'
 
   const userBadge = document.getElementById("userBadge");
   const openAuthModalBtn = document.getElementById("openAuthModalBtn");
-  const logoutBtn = document.getElementById("logoutBtn");
   const openMyTripsBtn = document.getElementById("openMyTripsBtn");
+  const openResetPwdBtn = document.getElementById("openResetPwdBtn");
+  const logoutBtn = document.getElementById("logoutBtn");
   const openSaveModalBtn = document.getElementById("openSaveModalBtn");
 
   const authModal = document.getElementById("authModal");
   const tabLoginBtn = document.getElementById("tabLoginBtn");
   const tabRegisterBtn = document.getElementById("tabRegisterBtn");
+  const tabResetBtn = document.getElementById("tabResetBtn");
   const authModalHeading = document.getElementById("authModalHeading");
+  const authModalSubtext = document.getElementById("authModalSubtext");
+  const authUsernameGroup = document.getElementById("authUsernameGroup");
   const authUsernameInput = document.getElementById("authUsernameInput");
+  const recoveryKeyGroup = document.getElementById("recoveryKeyGroup");
+  const authRecoveryKeyInput = document.getElementById("authRecoveryKeyInput");
+  const authPasswordLabel = document.getElementById("authPasswordLabel");
   const authPasswordInput = document.getElementById("authPasswordInput");
+
+  const authErrorBox = document.getElementById("authErrorBox");
   const authErrorMsg = document.getElementById("authErrorMsg");
+  const inlineResetTriggerBtn = document.getElementById("inlineResetTriggerBtn");
+
+  const recoveryKeyBox = document.getElementById("recoveryKeyBox");
+  const recoveryKeyTitle = document.getElementById("recoveryKeyTitle");
+  const recoveryKeyValue = document.getElementById("recoveryKeyValue");
+  const copyRecoveryKeyBtn = document.getElementById("copyRecoveryKeyBtn");
+
   const closeAuthModalBtn = document.getElementById("closeAuthModalBtn");
   const submitAuthBtn = document.getElementById("submitAuthBtn");
-
-  if (authUsernameInput) {
-    authUsernameInput.type = "email";
-    authUsernameInput.autocomplete = "email";
-    authUsernameInput.placeholder = "you@example.com";
-  }
 
   const saveModal = document.getElementById("saveModal");
   const closeSaveModalBtn = document.getElementById("closeSaveModalBtn");
@@ -53,47 +52,85 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
   const myTripsDirLabel = document.getElementById("myTripsDirLabel");
   const myTripsList = document.getElementById("myTripsList");
 
-  function openModal(modalEl) {
-    modalEl.classList.add("open");
-    modalEl.style.display = "flex";
+  function openModal(el) {
+    el.classList.add("open");
+    el.style.display = "flex";
   }
 
-  function closeModal(modalEl) {
-    modalEl.classList.remove("open");
-    modalEl.style.display = "none";
+  function closeModal(el) {
+    el.classList.remove("open");
+    el.style.display = "none";
   }
 
   function updateAuthUI() {
     if (currentUser) {
-      const folder = currentFolderSlug || emailToFolderSlug(currentUser);
-      userBadge.textContent = currentUser;
-      userBadge.title = `Storage directory: /trip/${folder}/`;
+      userBadge.textContent = `/trip/${currentUser}/`;
       userBadge.style.display = "inline";
       openAuthModalBtn.style.display = "none";
-      logoutBtn.style.display = "inline-block";
       openMyTripsBtn.style.display = "inline-block";
-      lockedDirDisplay.textContent = `/trip/${folder}/`;
+      openResetPwdBtn.style.display = "inline-block";
+      logoutBtn.style.display = "inline-block";
+      lockedDirDisplay.textContent = `/trip/${currentUser}/`;
     } else {
       userBadge.style.display = "none";
       openAuthModalBtn.style.display = "inline-block";
-      logoutBtn.style.display = "none";
       openMyTripsBtn.style.display = "none";
+      openResetPwdBtn.style.display = "none";
+      logoutBtn.style.display = "none";
     }
+  }
+
+  function clearAuthFeedback() {
+    authErrorBox.style.display = "none";
+    inlineResetTriggerBtn.style.display = "none";
+    recoveryKeyBox.style.display = "none";
   }
 
   function setAuthMode(mode) {
     authMode = mode;
-    authErrorMsg.style.display = "none";
+    clearAuthFeedback();
+    submitAuthBtn.style.display = "inline-block";
+
+    tabLoginBtn.classList.toggle("secondary", mode !== "login");
+    tabRegisterBtn.classList.toggle("secondary", mode !== "register");
+    tabResetBtn.classList.toggle("secondary", mode !== "reset");
+
     if (mode === "login") {
-      tabLoginBtn.classList.remove("secondary");
-      tabRegisterBtn.classList.add("secondary");
-      authModalHeading.textContent = "Sign In with Your Email";
+      authModalHeading.textContent = "Sign In to Your Account";
+      authModalSubtext.innerHTML = 'Your saved .KMZ files and photos are stored in your private <code>/trip/&lt;username&gt;/</code> directory.';
+      authUsernameGroup.style.display = "flex";
+      recoveryKeyGroup.style.display = "none";
+      authPasswordLabel.textContent = "Password";
+      authPasswordInput.placeholder = "Enter your password";
+      authPasswordInput.autocomplete = "current-password";
       submitAuthBtn.textContent = "Login";
-    } else {
-      tabRegisterBtn.classList.remove("secondary");
-      tabLoginBtn.classList.add("secondary");
-      authModalHeading.textContent = "Register with Your Email";
+    } else if (mode === "register") {
+      authModalHeading.textContent = "Create a New Account";
+      authModalSubtext.innerHTML = 'Creates your personal <code>/trip/&lt;username&gt;/</code> folder and generates a backup recovery key.';
+      authUsernameGroup.style.display = "flex";
+      recoveryKeyGroup.style.display = "none";
+      authPasswordLabel.textContent = "Create Password (min 6 characters)";
+      authPasswordInput.placeholder = "Choose a password";
+      authPasswordInput.autocomplete = "new-password";
       submitAuthBtn.textContent = "Register";
+    } else if (mode === "reset") {
+      authModalHeading.textContent = currentUser
+        ? `Reset Password for ${currentUser}`
+        : "Reset Forgotten Password";
+      if (currentUser) {
+        authModalSubtext.textContent = "You are currently signed in. Enter a new password below.";
+        authUsernameInput.value = currentUser;
+        authUsernameGroup.style.display = "none";
+        recoveryKeyGroup.style.display = "none";
+      } else {
+        authModalSubtext.textContent = "Enter your username, your 8-character recovery key, and a new password.";
+        authUsernameGroup.style.display = "flex";
+        recoveryKeyGroup.style.display = "flex";
+      }
+      authPasswordLabel.textContent = "New Password (min 6 characters)";
+      authPasswordInput.placeholder = "Enter new password";
+      authPasswordInput.autocomplete = "new-password";
+      submitAuthBtn.textContent = "Save New Password";
     }
   }
 
@@ -101,13 +138,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
     try {
       const res = await fetch("auth.php?action=status");
       const data = await res.json();
-      if (data.logged_in) {
-        currentUser = data.username;
-        currentFolderSlug = data.folder_slug || emailToFolderSlug(data.username);
-      } else {
-        currentUser = null;
-        currentFolderSlug = null;
-      }
+      currentUser = data.logged_in ? data.username : null;
       updateAuthUI();
     } catch (err) {
       console.warn("Auth status check failed:", err);
@@ -116,30 +147,50 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
   tabLoginBtn.addEventListener("click", () => setAuthMode("login"));
   tabRegisterBtn.addEventListener("click", () => setAuthMode("register"));
+  tabResetBtn.addEventListener("click", () => setAuthMode("reset"));
+
+  inlineResetTriggerBtn.addEventListener("click", () => {
+    setAuthMode("reset");
+  });
 
   openAuthModalBtn.addEventListener("click", () => {
     setAuthMode("login");
-    authModal.classList.add("open"); authModal.style.display = "flex";
+    openModal(authModal);
   });
-  closeAuthModalBtn.addEventListener("click", () => authModal.classList.remove("open"));
+
+  openResetPwdBtn.addEventListener("click", () => {
+    setAuthMode("reset");
+    openModal(authModal);
+  });
+
+  closeAuthModalBtn.addEventListener("click", () => closeModal(authModal));
+
+  copyRecoveryKeyBtn.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(recoveryKeyValue.textContent);
+    copyRecoveryKeyBtn.textContent = "Copied!";
+    setTimeout(() => (copyRecoveryKeyBtn.textContent = "Copy"), 2000);
+  });
 
   submitAuthBtn.addEventListener("click", async () => {
-    authErrorMsg.style.display = "none";
-    const emailVal = authUsernameInput.value.trim().toLowerCase();
-
-    if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
-      authErrorMsg.textContent = "Please enter a valid email address.";
-      authErrorMsg.style.display = "block";
-      return;
-    }
-
+    clearAuthFeedback();
     submitAuthBtn.disabled = true;
 
     try {
       const formData = new FormData();
-      formData.append("action", authMode);
-      formData.append("username", emailVal);
-      formData.append("password", authPasswordInput.value);
+      const targetUser = (currentUser && authMode === "reset")
+        ? currentUser
+        : authUsernameInput.value.trim();
+
+      formData.append("username", targetUser);
+
+      if (authMode === "reset") {
+        formData.append("action", "reset_password");
+        formData.append("new_password", authPasswordInput.value);
+        formData.append("recovery_key", authRecoveryKeyInput.value.trim());
+      } else {
+        formData.append("action", authMode);
+        formData.append("password", authPasswordInput.value);
+      }
 
       const res = await fetch("auth.php", { method: "POST", body: formData });
       const rawText = await res.text();
@@ -151,17 +202,33 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
       }
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Authentication failed");
+        const err = new Error(data.error || "Authentication failed");
+        err.code = data.error_code || "";
+        throw err;
       }
 
       currentUser = data.username;
-      currentFolderSlug = data.folder_slug || emailToFolderSlug(data.username);
       authPasswordInput.value = "";
-      authModal.classList.remove("open"); authModal.style.display = "none";
+      authRecoveryKeyInput.value = "";
       updateAuthUI();
+
+      // If registering or resetting password, show the new recovery key before closing
+      if (data.recovery_key) {
+        recoveryKeyTitle.textContent = authMode === "register"
+          ? "Account Created! Save Your Recovery Key:"
+          : "Password Updated! Save Your New Recovery Key:";
+        recoveryKeyValue.textContent = data.recovery_key;
+        recoveryKeyBox.style.display = "block";
+        submitAuthBtn.style.display = "none";
+      } else {
+        closeModal(authModal);
+      }
     } catch (err) {
       authErrorMsg.textContent = err.message;
-      authErrorMsg.style.display = "block";
+      authErrorBox.style.display = "block";
+      if (err.code === "WRONG_PASSWORD") {
+        inlineResetTriggerBtn.style.display = "inline-block";
+      }
     } finally {
       submitAuthBtn.disabled = false;
     }
@@ -170,23 +237,21 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
   logoutBtn.addEventListener("click", async () => {
     await fetch("auth.php?action=logout");
     currentUser = null;
-    currentFolderSlug = null;
     updateAuthUI();
   });
 
   openSaveModalBtn.addEventListener("click", () => {
     if (!currentUser) {
       setAuthMode("login");
-      authModal.classList.add("open"); authModal.style.display = "flex";
+      openModal(authModal);
       return;
     }
-    const folder = currentFolderSlug || emailToFolderSlug(currentUser);
     shareResultBox.style.display = "none";
-    lockedDirDisplay.textContent = `/trip/${folder}/`;
-    saveModal.classList.add("open"); saveModal.style.display = "flex";
+    lockedDirDisplay.textContent = `/trip/${currentUser}/`;
+    openModal(saveModal);
   });
 
-  closeSaveModalBtn.addEventListener("click", () => saveModal.classList.remove("open"));
+  closeSaveModalBtn.addEventListener("click", () => closeModal(saveModal));
   copySavedUrlBtn.addEventListener("click", async () => {
     await navigator.clipboard.writeText(generatedShareUrl.value);
     copySavedUrlBtn.textContent = "Copied!";
@@ -195,9 +260,9 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
   async function saveToDirectory(saveMode) {
     if (!currentUser) {
-      saveModal.classList.remove("open"); saveModal.style.display = "none";
+      closeModal(saveModal);
       setAuthMode("login");
-      authModal.classList.add("open"); authModal.style.display = "flex";
+      openModal(authModal);
       return;
     }
 
@@ -245,7 +310,6 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
         throw new Error(data.error || "Upload failed");
       }
 
-      const folder = data.folder_slug || currentFolderSlug || emailToFolderSlug(currentUser);
       shareResultBox.style.display = "flex";
       const statusHeader = shareResultBox.querySelector("strong");
 
@@ -257,8 +321,8 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
         downloadHostedKmzLink.style.display = "inline";
         window.history.replaceState({}, "", `/?kmz=${encodeURIComponent(data.kmz_path)}`);
       } else {
-        statusHeader.textContent = `Saved ${data.saved_photos.length} image(s) to /trip/${folder}/${tripSlug}/`;
-        generatedShareUrl.value = `${window.location.origin}/trip/${folder}/${tripSlug}/`;
+        statusHeader.textContent = `Saved ${data.saved_photos.length} image(s) to /trip/${currentUser}/${tripSlug}/`;
+        generatedShareUrl.value = `${window.location.origin}/trip/${currentUser}/${tripSlug}/`;
         downloadHostedKmzLink.style.display = "none";
       }
     } catch (err) {
@@ -273,12 +337,11 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
   saveKmzOnlyBtn.addEventListener("click", () => saveToDirectory("kmz_only"));
   saveImagesOnlyBtn.addEventListener("click", () => saveToDirectory("images_only"));
 
-  closeMyTripsBtn.addEventListener("click", () => myTripsModal.classList.remove("open"));
+  closeMyTripsBtn.addEventListener("click", () => closeModal(myTripsModal));
 
   async function fetchAndRenderMyTrips() {
     if (!currentUser) return;
-    const folder = currentFolderSlug || emailToFolderSlug(currentUser);
-    myTripsDirLabel.textContent = `/trip/${folder}/`;
+    myTripsDirLabel.textContent = `/trip/${currentUser}/`;
     myTripsList.innerHTML = `<p style="font-size: 0.85rem; color: #5f6368;">Loading saved trips...</p>`;
 
     try {
@@ -296,7 +359,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
       }
 
       if (!data.trips.length) {
-        myTripsList.innerHTML = `<p style="font-size: 0.85rem; color: #5f6368; padding: 12px 0;">No trips saved yet in <code>/trip/${escapeHtml(folder)}/</code>. Upload photos and click <b>Save to Site</b> to store your first trip.</p>`;
+        myTripsList.innerHTML = `<p style="font-size: 0.85rem; color: #5f6368; padding: 12px 0;">No trips saved yet in <code>/trip/${escapeHtml(currentUser)}/</code>. Upload photos and click <b>Save to Site</b> to store your first trip.</p>`;
         return;
       }
 
@@ -328,7 +391,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
           loadBtn.textContent = "Load on Map";
           loadBtn.style.cssText = "padding:6px 10px; font-size:0.8rem;";
           loadBtn.addEventListener("click", () => {
-            myTripsModal.classList.remove("open"); myTripsModal.style.display = "none";
+            closeModal(myTripsModal);
             onLoadSavedKmz(trip.kmz_path);
           });
           btnGroup.appendChild(loadBtn);
@@ -340,7 +403,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
         delBtn.textContent = "Delete";
         delBtn.style.cssText = "padding:6px 10px; font-size:0.8rem; color:#d93025; border-color:#f5c2c7;";
         delBtn.addEventListener("click", async () => {
-          if (!confirm(`Delete "${trip.slug}" permanently from /trip/${folder}/?`)) return;
+          if (!confirm(`Delete "${trip.slug}" permanently from /trip/${currentUser}/?`)) return;
           delBtn.disabled = true;
           delBtn.textContent = "Deleting...";
           try {
@@ -375,7 +438,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
   openMyTripsBtn.addEventListener("click", () => {
     if (!currentUser) return;
-    myTripsModal.classList.add("open"); myTripsModal.style.display = "flex";
+    openModal(myTripsModal);
     fetchAndRenderMyTrips();
   });
 
