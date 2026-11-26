@@ -6,7 +6,7 @@ import {
   resolveKmzFetchUrl
 } from "./kmz.js";
 import { createMapController } from "./map.js";
-import { initAccountSystem } from "./auth.js";
+import { initAccountSystem } from "./auth.js?v=8";
 
 const DEFAULT_DEMO_KMZ = "examples/sanitas-20261121.kmz";
 const FEATURED_PHOTO_NAME = "IMG_8882.JPEG";
