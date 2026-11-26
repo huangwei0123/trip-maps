@@ -53,6 +53,16 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
   const myTripsDirLabel = document.getElementById("myTripsDirLabel");
   const myTripsList = document.getElementById("myTripsList");
 
+  function openModal(modalEl) {
+    modalEl.classList.add("open");
+    modalEl.style.display = "flex";
+  }
+
+  function closeModal(modalEl) {
+    modalEl.classList.remove("open");
+    modalEl.style.display = "none";
+  }
+
   function updateAuthUI() {
     if (currentUser) {
       const folder = currentFolderSlug || emailToFolderSlug(currentUser);
@@ -109,7 +119,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
   openAuthModalBtn.addEventListener("click", () => {
     setAuthMode("login");
-    authModal.classList.add("open");
+    authModal.classList.add("open"); authModal.style.display = "flex";
   });
   closeAuthModalBtn.addEventListener("click", () => authModal.classList.remove("open"));
 
@@ -147,7 +157,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
       currentUser = data.username;
       currentFolderSlug = data.folder_slug || emailToFolderSlug(data.username);
       authPasswordInput.value = "";
-      authModal.classList.remove("open");
+      authModal.classList.remove("open"); authModal.style.display = "none";
       updateAuthUI();
     } catch (err) {
       authErrorMsg.textContent = err.message;
@@ -167,13 +177,13 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
   openSaveModalBtn.addEventListener("click", () => {
     if (!currentUser) {
       setAuthMode("login");
-      authModal.classList.add("open");
+      authModal.classList.add("open"); authModal.style.display = "flex";
       return;
     }
     const folder = currentFolderSlug || emailToFolderSlug(currentUser);
     shareResultBox.style.display = "none";
     lockedDirDisplay.textContent = `/trip/${folder}/`;
-    saveModal.classList.add("open");
+    saveModal.classList.add("open"); saveModal.style.display = "flex";
   });
 
   closeSaveModalBtn.addEventListener("click", () => saveModal.classList.remove("open"));
@@ -185,9 +195,9 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
   async function saveToDirectory(saveMode) {
     if (!currentUser) {
-      saveModal.classList.remove("open");
+      saveModal.classList.remove("open"); saveModal.style.display = "none";
       setAuthMode("login");
-      authModal.classList.add("open");
+      authModal.classList.add("open"); authModal.style.display = "flex";
       return;
     }
 
@@ -318,7 +328,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
           loadBtn.textContent = "Load on Map";
           loadBtn.style.cssText = "padding:6px 10px; font-size:0.8rem;";
           loadBtn.addEventListener("click", () => {
-            myTripsModal.classList.remove("open");
+            myTripsModal.classList.remove("open"); myTripsModal.style.display = "none";
             onLoadSavedKmz(trip.kmz_path);
           });
           btnGroup.appendChild(loadBtn);
@@ -365,7 +375,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
   openMyTripsBtn.addEventListener("click", () => {
     if (!currentUser) return;
-    myTripsModal.classList.add("open");
+    myTripsModal.classList.add("open"); myTripsModal.style.display = "flex";
     fetchAndRenderMyTrips();
   });
 
