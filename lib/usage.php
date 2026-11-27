@@ -266,9 +266,12 @@ function usage_is_admin(string $username): bool
 /**
  * Build the dashboard payload.
  *
- * @param bool $includeAll false => only the viewer's own data
+ * @param bool  $includeAll false => only the viewer's own data
+ * @param array $accounts   list of ['slug' =>, 'email' =>, 'created_at' =>]
+ *                          from the users table (all users for admins, just
+ *                          the viewer otherwise)
  */
-function usage_summary(string $viewer, bool $includeAll): array
+function usage_summary(string $viewer, bool $includeAll, array $accounts = []): array
 {
     $viewer = usage_normalize_user($viewer);
     $events = usage_read_events(5000);
@@ -317,21 +320,33 @@ function usage_summary(string $viewer, bool $includeAll): array
         unset($agg);
     }
 
-    $usernames = [];
+    $accountMap = [];
+    foreach ($accounts as $account) {
+        if (!is_array($account)) {
+            continue;
+        }
+        $slug = usage_normalize_user($account['slug'] ?? '');
+        if ($slug === '') {
+            continue;
+        }
+        $accountMap[$slug] = [
+            'email'      => isset($account['email']) ? (string) $account['email'] : null,
+            'created_at' => isset($account['created_at']) ? (string) $account['created_at'] : null,
+        ];
+    }
+
+    if (!isset($accountMap[$viewer])) {
+        $accountMap[$viewer] = ['email' => null, 'created_at' => null];
+    }
+
     if ($includeAll) {
-        $userFiles = glob(usage_root() . '/users/*.json');
-        if (is_array($userFiles)) {
-            foreach ($userFiles as $file) {
-                $usernames[] = basename($file, '.json');
+        // Keep users whose accounts were deleted but still have events.
+        foreach (array_keys($aggregates) as $user) {
+            if (!isset($accountMap[$user])) {
+                $accountMap[$user] = ['email' => null, 'created_at' => null];
             }
         }
-        foreach (array_keys($aggregates) as $user) {
-            $usernames[] = $user;
-        }
-    } else {
-        $usernames[] = $viewer;
     }
-    $usernames = array_values(array_unique(array_filter($usernames)));
 
     $emptyAgg = [
         'first_seen' => null,
@@ -344,27 +359,14 @@ function usage_summary(string $viewer, bool $includeAll): array
     ];
 
     $rows = [];
-    foreach ($usernames as $user) {
-        $user = usage_normalize_user($user);
-        if ($user === '') {
-            continue;
-        }
-
-        $agg = isset($aggregates[$user]) ? $aggregates[$user] : $emptyAgg;
-        $metrics = usage_user_metrics($user);
-
-        $createdAt = null;
-        $userFile = usage_root() . '/users/' . $user . '.json';
-        if (is_file($userFile)) {
-            $userData = json_decode((string) @file_get_contents($userFile), true);
-            if (is_array($userData) && !empty($userData['created_at'])) {
-                $createdAt = $userData['created_at'];
-            }
-        }
+    foreach ($accountMap as $slug => $info) {
+        $agg = isset($aggregates[$slug]) ? $aggregates[$slug] : $emptyAgg;
+        $metrics = usage_user_metrics($slug);
 
         $rows[] = [
-            'username' => $user,
-            'created_at' => $createdAt,
+            'username' => $slug,
+            'email' => $info['email'],
+            'created_at' => $info['created_at'],
             'last_login' => $agg['last_login'],
             'login_count' => $agg['login_count'],
             'links_created' => $agg['links_created'],

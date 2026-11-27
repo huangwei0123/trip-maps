@@ -6,7 +6,12 @@ personal-access.token
 *.kml
 __pycache__/
 
-# Runtime data (accounts, uploads, usage logs)
+# Runtime data (legacy accounts, uploads, usage logs)
 users/
 trip/
 stats/
+
+# Local config & secrets
+config.php
+photoonmaps-config.php
+.env

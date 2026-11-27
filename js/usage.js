@@ -82,7 +82,10 @@ function renderTable(users) {
     .map(
       (user) => `
         <tr>
-          <td><span class="usage-user">${escapeHtml(user.username)}</span></td>
+          <td>
+            <span class="usage-user">${escapeHtml(user.email || user.username)}</span>
+            ${user.email ? `<span class="usage-muted">${escapeHtml(user.username)}</span>` : ""}
+          </td>
           <td>
             ${
               user.last_login

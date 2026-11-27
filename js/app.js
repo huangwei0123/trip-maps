@@ -423,16 +423,7 @@ const account = initAccountSystem({
   }
 });
 
-function configureEmailInputs() {
-  document.querySelectorAll('input[name="username"], #authUsername, #loginUsername').forEach((input) => {
-    input.type = "email";
-    input.autocomplete = "email";
-    input.placeholder = "you@example.com";
-  });
-}
-
 window.addEventListener("DOMContentLoaded", () => {
-  configureEmailInputs();
   account.checkSessionStatus();
   const params = new URLSearchParams(window.location.search);
   const kmzParam = params.get("kmz");

@@ -43,13 +43,19 @@
       <button id="openAuthModalBtn" class="secondary">Login / Register</button>
       <button id="openMyTripsBtn" class="secondary" style="display: none;">My Trips</button>
       <button id="openUsageBtn" class="secondary" style="display: none;">Usage</button>
-      <button id="openResetPwdBtn" class="secondary" style="display: none;">Reset Password</button>
+      <button id="openChangePwdBtn" class="secondary" style="display: none;">Change Password</button>
       <button id="logoutBtn" class="secondary" style="display: none;">Logout</button>
       <button id="openSaveModalBtn" class="save-btn" disabled>Save to Site</button>
       <button id="downloadKmzBtn" disabled>Download .KMZ</button>
       <button id="clearBtn" class="secondary" disabled>Clear</button>
     </div>
   </header>
+
+  <!-- Shown until the user confirms their email address -->
+  <div id="verifyBanner" style="display: none; align-items: center; justify-content: center; gap: 12px; padding: 8px 16px; background: #fef7e0; border-bottom: 1px solid #fdd663; color: #7a5c00; font-size: 0.83rem;">
+    <span>Confirm your email address to save trips to the site.</span>
+    <button id="resendVerifyBtn" type="button" style="padding: 4px 10px; font-size: 0.78rem; border: 1px solid #fdd663; background: #fff; color: #7a5c00; border-radius: 4px; cursor: pointer;">Resend email</button>
+  </div>
 
   <div class="workspace">
     <aside class="sidebar">
@@ -92,51 +98,44 @@
     </div>
   </div>
 
-  <!-- Login / Register / Reset Password Modal -->
+  <!-- Login / Register / Forgot / Change Password Modal -->
   <div class="modal-backdrop" id="authModal" style="display: none;">
     <div class="modal-card">
       <div style="display: flex; gap: 6px; border-bottom: 1px solid #dadce0; padding-bottom: 10px;">
         <button id="tabLoginBtn" type="button" style="flex: 1;">Login</button>
         <button id="tabRegisterBtn" type="button" class="secondary" style="flex: 1;">Register</button>
-        <button id="tabResetBtn" type="button" class="secondary" style="flex: 1;">Reset Password</button>
       </div>
 
-      <h3 id="authModalHeading">Sign In with Your Email</h3>
+      <h3 id="authModalHeading">Sign In</h3>
       <p id="authModalSubtext" style="font-size: 0.82rem; color: #5f6368;">
-        Your saved .KMZ files and photos are stored in your private <code>/trip/&lt;username&gt;/</code> directory.
+        Your saved .KMZ files and photos are stored in your private <code>/trip/&lt;your-folder&gt;/</code> directory.
       </p>
 
-      <div class="field-group" id="authUsernameGroup">
-        <label for="authUsernameInput">Email or Username</label>
-        <input type="text" id="authUsernameInput" placeholder="e.g. you@gmail.com" autocomplete="username" />
+      <div class="field-group" id="authEmailGroup">
+        <label for="authEmailInput">Email address</label>
+        <input type="email" id="authEmailInput" placeholder="you@example.com" autocomplete="email" />
       </div>
 
-      <div class="field-group" id="recoveryKeyGroup" style="display: none;">
-        <label for="authRecoveryKeyInput">8-Character Recovery Key</label>
-        <input type="text" id="authRecoveryKeyInput" placeholder="e.g. A3F902C1" style="text-transform: uppercase;" />
+      <div class="field-group" id="authCurrentPasswordGroup" style="display: none;">
+        <label for="authCurrentPasswordInput">Current password</label>
+        <input type="password" id="authCurrentPasswordInput" autocomplete="current-password" />
       </div>
 
-      <div class="field-group">
-        <label for="authPasswordInput" id="authPasswordLabel">Password (min 6 characters)</label>
-        <input type="password" id="authPasswordInput" placeholder="Enter password" autocomplete="current-password" />
+      <div class="field-group" id="authPasswordGroup">
+        <label for="authPasswordInput" id="authPasswordLabel">Password</label>
+        <input type="password" id="authPasswordInput" placeholder="Enter your password" autocomplete="current-password" />
       </div>
 
-      <!-- Wrong Password / Error Banner with Quick Reset Button -->
+      <p id="forgotPasswordRow" style="font-size: 0.8rem; text-align: right; margin: 6px 0 0;">
+        <a href="#" id="forgotPasswordLink" style="color: #1a73e8; text-decoration: none;">Forgot password?</a>
+      </p>
+
       <div id="authErrorBox" style="display: none; background: #fce8e6; border: 1px solid #f5c2c7; border-radius: 6px; padding: 10px; font-size: 0.82rem; color: #c5221f;">
         <div id="authErrorMsg"></div>
-        <button id="inlineResetTriggerBtn" type="button" class="secondary" style="margin-top: 8px; padding: 5px 10px; font-size: 0.78rem; color: #1a73e8; display: none;">
-          Reset Password Now
-        </button>
       </div>
 
-      <!-- Recovery Key Display Banner after Register or Password Reset -->
-      <div id="recoveryKeyBox" style="display: none; background: #e6f4ea; border: 1px solid #ceead6; border-radius: 6px; padding: 12px; font-size: 0.82rem; color: #137333;">
-        <strong id="recoveryKeyTitle">Account Created! Save Your Recovery Key:</strong>
-        <div style="margin: 6px 0; font-family: monospace; font-size: 1.05rem; font-weight: 700; background: #fff; padding: 6px 10px; border-radius: 4px; border: 1px solid #a8dab5; display: flex; justify-content: space-between; align-items: center;">
-          <span id="recoveryKeyValue"></span>
-          <button id="copyRecoveryKeyBtn" type="button" style="padding: 4px 8px; font-size: 0.75rem;">Copy</button>
-        </div>
-        <span style="font-size: 0.76rem; color: #3c4043;">Keep this key safe—you will need it if you ever forget your password.</span>
+      <div id="authNoticeBox" style="display: none; background: #e6f4ea; border: 1px solid #ceead6; border-radius: 6px; padding: 10px; font-size: 0.82rem; color: #137333;">
+        <div id="authNoticeMsg"></div>
       </div>
 
       <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px;">

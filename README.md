@@ -1,6 +1,10 @@
-# PhotoOnMaps (trip-maps)
+# PhotoOnMaps
+
+<https://www.photoonmaps.com> — display your photos on Google Earth.
 
 Turn geotagged photos into a 3D map, save trips into your own folder, and share them as links or Google Earth `.KMZ` files.
+
+Accounts use email + password with confirmation and reset links; see [AUTH-SETUP.md](AUTH-SETUP.md) for deployment.
 
 ## Usage tracking
 
@@ -9,11 +13,13 @@ The `feature/usage-tracking` branch records lightweight usage statistics:
 | Metric | Source |
 | --- | --- |
 | Login times | `register`, `login`, `logout`, `password_reset` events |
-| Storage used | live scan of `trip/<username>/` |
+| Storage used | live scan of `trip/<folder-slug>/` |
 | Links created | `link_created` event on every successful save in `save_trip.php` |
 | Trips deleted | `trip_deleted` event from `my_trips.php` |
 
-Events are appended to `stats/events.jsonl` (one JSON object per line, auto-rotated at ~2 MB). The `stats/` folder is denied direct web access with `.htaccess` and is ignored by git, along with `users/` and `trip/`.
+Events are appended to `stats/events.jsonl` (one JSON object per line, auto-rotated at ~2 MB). The `stats/` folder is denied direct web access with `.htaccess` and is ignored by git, along with `trip/`.
+
+Users are identified by their `folder_slug` (their directory name under `trip/`); the dashboard also shows the account email.
 
 ### Dashboard
 
@@ -23,15 +29,13 @@ Open `usage.html` (also linked from the **Usage** button after login). A normal 
 
 Either:
 
-1. Create `stats/admins.json` on the server:
+1. Create `stats/admins.json` on the server, listing folder slugs:
 
    ```json
-   ["your-username", "second-admin"]
+   ["huangwei-1a2b3c", "second-slug"]
    ```
 
-2. Or set the environment variable `PHOTOONMAPS_ADMINS=your-username,second-admin`.
-
-Usernames are normalized the same way as `auth.php` (lowercase, `a-z0-9_-` only).
+2. Or set the environment variable `PHOTOONMAPS_ADMINS=huangwei-1a2b3c,second-slug`.
 
 ### API
 

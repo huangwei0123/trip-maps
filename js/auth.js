@@ -1,38 +1,49 @@
 import { buildKmzBlob, escapeHtml } from "./kmz.js";
 
+/**
+ * Account UI: email + password sign-in, registration, password reset by email,
+ * password change, saving trips and listing them.
+ *
+ * The server (auth.php) is the source of truth. Every state-changing request
+ * carries the CSRF token returned by action=status.
+ */
 export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoadSavedKmz }) {
-  let currentUser = null;
-  let authMode = "login"; // 'login' | 'register' | 'reset'
+  const state = { user: null, csrf: null };
+  let mode = "login"; // 'login' | 'register' | 'forgot' | 'change'
 
+  /* ---------------------------------------------------------- elements -- */
   const userBadge = document.getElementById("userBadge");
   const openAuthModalBtn = document.getElementById("openAuthModalBtn");
   const openMyTripsBtn = document.getElementById("openMyTripsBtn");
   const openUsageBtn = document.getElementById("openUsageBtn");
-  const openResetPwdBtn = document.getElementById("openResetPwdBtn");
+  const openChangePwdBtn = document.getElementById("openChangePwdBtn");
   const logoutBtn = document.getElementById("logoutBtn");
   const openSaveModalBtn = document.getElementById("openSaveModalBtn");
+
+  const verifyBanner = document.getElementById("verifyBanner");
+  const resendVerifyBtn = document.getElementById("resendVerifyBtn");
 
   const authModal = document.getElementById("authModal");
   const tabLoginBtn = document.getElementById("tabLoginBtn");
   const tabRegisterBtn = document.getElementById("tabRegisterBtn");
-  const tabResetBtn = document.getElementById("tabResetBtn");
   const authModalHeading = document.getElementById("authModalHeading");
   const authModalSubtext = document.getElementById("authModalSubtext");
-  const authUsernameGroup = document.getElementById("authUsernameGroup");
-  const authUsernameInput = document.getElementById("authUsernameInput");
-  const recoveryKeyGroup = document.getElementById("recoveryKeyGroup");
-  const authRecoveryKeyInput = document.getElementById("authRecoveryKeyInput");
+
+  const authEmailGroup = document.getElementById("authEmailGroup");
+  const authEmailInput = document.getElementById("authEmailInput");
+  const authCurrentPasswordGroup = document.getElementById("authCurrentPasswordGroup");
+  const authCurrentPasswordInput = document.getElementById("authCurrentPasswordInput");
+  const authPasswordGroup = document.getElementById("authPasswordGroup");
   const authPasswordLabel = document.getElementById("authPasswordLabel");
   const authPasswordInput = document.getElementById("authPasswordInput");
 
+  const forgotPasswordRow = document.getElementById("forgotPasswordRow");
+  const forgotPasswordLink = document.getElementById("forgotPasswordLink");
+
   const authErrorBox = document.getElementById("authErrorBox");
   const authErrorMsg = document.getElementById("authErrorMsg");
-  const inlineResetTriggerBtn = document.getElementById("inlineResetTriggerBtn");
-
-  const recoveryKeyBox = document.getElementById("recoveryKeyBox");
-  const recoveryKeyTitle = document.getElementById("recoveryKeyTitle");
-  const recoveryKeyValue = document.getElementById("recoveryKeyValue");
-  const copyRecoveryKeyBtn = document.getElementById("copyRecoveryKeyBtn");
+  const authNoticeBox = document.getElementById("authNoticeBox");
+  const authNoticeMsg = document.getElementById("authNoticeMsg");
 
   const closeAuthModalBtn = document.getElementById("closeAuthModalBtn");
   const submitAuthBtn = document.getElementById("submitAuthBtn");
@@ -53,6 +64,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
   const myTripsDirLabel = document.getElementById("myTripsDirLabel");
   const myTripsList = document.getElementById("myTripsList");
 
+  /* ----------------------------------------------------------- helpers -- */
   function openModal(el) {
     el.classList.add("open");
     el.style.display = "flex";
@@ -63,75 +75,140 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
     el.style.display = "none";
   }
 
-  function updateAuthUI() {
-    if (currentUser) {
-      userBadge.textContent = `/trip/${currentUser}/`;
+  function clearFeedback() {
+    authErrorBox.style.display = "none";
+    authNoticeBox.style.display = "none";
+  }
+
+  function showError(message) {
+    authErrorMsg.textContent = message;
+    authErrorBox.style.display = "block";
+    authNoticeBox.style.display = "none";
+  }
+
+  function showNotice(message) {
+    authNoticeMsg.textContent = message;
+    authNoticeBox.style.display = "block";
+    authErrorBox.style.display = "none";
+  }
+
+  /**
+   * POST to auth.php with the CSRF token and parse the JSON response.
+   */
+  async function api(action, fields = {}) {
+    const body = new FormData();
+    body.append("action", action);
+    Object.entries(fields).forEach(([key, value]) => body.append(key, value ?? ""));
+
+    const headers = state.csrf ? { "X-CSRF-Token": state.csrf } : {};
+    const res = await fetch("auth.php", {
+      method: "POST",
+      body,
+      headers,
+      credentials: "same-origin",
+    });
+
+    const rawText = await res.text();
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      throw new Error(`Server returned HTTP ${res.status} (non-JSON).`);
+    }
+
+    if (!res.ok || !data.success) {
+      const err = new Error(data.error || "Request failed");
+      err.code = data.error_code || "";
+      err.status = res.status;
+      throw err;
+    }
+
+    if (data.csrf) state.csrf = data.csrf;
+    return data;
+  }
+
+  function applyStatus(data) {
+    if (data.csrf) state.csrf = data.csrf;
+    state.user = data.logged_in
+      ? {
+          email: data.email || "",
+          folderSlug: data.folder_slug || "",
+          verified: Boolean(data.email_verified),
+        }
+      : null;
+    updateUI();
+  }
+
+  function updateUI() {
+    const user = state.user;
+
+    if (user) {
+      userBadge.textContent = user.email;
+      userBadge.title = user.folderSlug ? `/trip/${user.folderSlug}/` : "";
       userBadge.style.display = "inline";
+      userBadge.style.maxWidth = "190px";
+      userBadge.style.overflow = "hidden";
+      userBadge.style.textOverflow = "ellipsis";
+      userBadge.style.whiteSpace = "nowrap";
+
       openAuthModalBtn.style.display = "none";
       openMyTripsBtn.style.display = "inline-block";
       if (openUsageBtn) openUsageBtn.style.display = "inline-block";
-      openResetPwdBtn.style.display = "inline-block";
+      openChangePwdBtn.style.display = "inline-block";
       logoutBtn.style.display = "inline-block";
-      lockedDirDisplay.textContent = `/trip/${currentUser}/`;
+      verifyBanner.style.display = user.verified ? "none" : "flex";
     } else {
       userBadge.style.display = "none";
       openAuthModalBtn.style.display = "inline-block";
       openMyTripsBtn.style.display = "none";
       if (openUsageBtn) openUsageBtn.style.display = "none";
-      openResetPwdBtn.style.display = "none";
+      openChangePwdBtn.style.display = "none";
       logoutBtn.style.display = "none";
+      verifyBanner.style.display = "none";
     }
   }
 
-  function clearAuthFeedback() {
-    authErrorBox.style.display = "none";
-    inlineResetTriggerBtn.style.display = "none";
-    recoveryKeyBox.style.display = "none";
-  }
+  function setMode(next) {
+    mode = next;
+    clearFeedback();
 
-  function setAuthMode(mode) {
-    authMode = mode;
-    clearAuthFeedback();
-    submitAuthBtn.style.display = "inline-block";
+    tabLoginBtn.classList.toggle("secondary", next !== "login");
+    tabRegisterBtn.classList.toggle("secondary", next !== "register");
 
-    tabLoginBtn.classList.toggle("secondary", mode !== "login");
-    tabRegisterBtn.classList.toggle("secondary", mode !== "register");
-    tabResetBtn.classList.toggle("secondary", mode !== "reset");
+    const showEmail = next === "login" || next === "register" || next === "forgot";
+    authEmailGroup.style.display = showEmail ? "flex" : "none";
+    authCurrentPasswordGroup.style.display = next === "change" ? "flex" : "none";
+    authPasswordGroup.style.display = next === "forgot" ? "none" : "flex";
+    forgotPasswordRow.style.display = next === "login" ? "block" : "none";
 
-    if (mode === "login") {
-      authModalHeading.textContent = "Sign In to Your Account";
-      authModalSubtext.innerHTML = 'Your saved .KMZ files and photos are stored in your private <code>/trip/&lt;username&gt;/</code> directory.';
-      authUsernameGroup.style.display = "flex";
-      recoveryKeyGroup.style.display = "none";
+    if (next === "login") {
+      authModalHeading.textContent = "Sign In";
+      authModalSubtext.innerHTML =
+        "Your saved .KMZ files and photos are stored in your private <code>/trip/&lt;your-folder&gt;/</code> directory.";
       authPasswordLabel.textContent = "Password";
       authPasswordInput.placeholder = "Enter your password";
       authPasswordInput.autocomplete = "current-password";
       submitAuthBtn.textContent = "Login";
-    } else if (mode === "register") {
-      authModalHeading.textContent = "Create a New Account";
-      authModalSubtext.innerHTML = 'Creates your personal <code>/trip/&lt;username&gt;/</code> folder and generates a backup recovery key.';
-      authUsernameGroup.style.display = "flex";
-      recoveryKeyGroup.style.display = "none";
-      authPasswordLabel.textContent = "Create Password (min 6 characters)";
-      authPasswordInput.placeholder = "Choose a password";
+    } else if (next === "register") {
+      authModalHeading.textContent = "Create an Account";
+      authModalSubtext.innerHTML =
+        "We'll email you a confirmation link. You can browse right away, but saving trips needs a confirmed address.";
+      authPasswordLabel.textContent = "Create Password (min 10 characters)";
+      authPasswordInput.placeholder = "Choose a strong password";
       authPasswordInput.autocomplete = "new-password";
       submitAuthBtn.textContent = "Register";
-    } else if (mode === "reset") {
-      authModalHeading.textContent = currentUser
-        ? `Reset Password for ${currentUser}`
-        : "Reset Forgotten Password";
-      if (currentUser) {
-        authModalSubtext.textContent = "You are currently signed in. Enter a new password below.";
-        authUsernameInput.value = currentUser;
-        authUsernameGroup.style.display = "none";
-        recoveryKeyGroup.style.display = "none";
-      } else {
-        authModalSubtext.textContent = "Enter your username, your 8-character recovery key, and a new password.";
-        authUsernameGroup.style.display = "flex";
-        recoveryKeyGroup.style.display = "flex";
-      }
-      authPasswordLabel.textContent = "New Password (min 6 characters)";
-      authPasswordInput.placeholder = "Enter new password";
+    } else if (next === "forgot") {
+      authModalHeading.textContent = "Reset Your Password";
+      authModalSubtext.textContent =
+        "Enter the email address on your account and we'll send you a link to choose a new password.";
+      submitAuthBtn.textContent = "Send Reset Link";
+    } else if (next === "change") {
+      authModalHeading.textContent = "Change Password";
+      authModalSubtext.textContent = state.user
+        ? `Signed in as ${state.user.email}. Enter your current password to set a new one.`
+        : "Enter your current password to set a new one.";
+      authPasswordLabel.textContent = "New Password (min 10 characters)";
+      authPasswordInput.placeholder = "Choose a new password";
       authPasswordInput.autocomplete = "new-password";
       submitAuthBtn.textContent = "Save New Password";
     }
@@ -139,122 +216,135 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
   async function checkSessionStatus() {
     try {
-      const res = await fetch("auth.php?action=status");
+      const res = await fetch("auth.php?action=status", { credentials: "same-origin" });
       const data = await res.json();
-      currentUser = data.logged_in ? data.username : null;
-      updateAuthUI();
+      applyStatus(data);
     } catch (err) {
       console.warn("Auth status check failed:", err);
     }
   }
 
-  tabLoginBtn.addEventListener("click", () => setAuthMode("login"));
-  tabRegisterBtn.addEventListener("click", () => setAuthMode("register"));
-  tabResetBtn.addEventListener("click", () => setAuthMode("reset"));
+  /* ------------------------------------------------------------- events -- */
+  tabLoginBtn.addEventListener("click", () => setMode("login"));
+  tabRegisterBtn.addEventListener("click", () => setMode("register"));
 
-  inlineResetTriggerBtn.addEventListener("click", () => {
-    setAuthMode("reset");
+  forgotPasswordLink.addEventListener("click", (event) => {
+    event.preventDefault();
+    authEmailInput.value = state.user ? state.user.email : authEmailInput.value;
+    setMode("forgot");
   });
 
   openAuthModalBtn.addEventListener("click", () => {
-    setAuthMode("login");
+    setMode("login");
     openModal(authModal);
   });
 
-  openResetPwdBtn.addEventListener("click", () => {
-    setAuthMode("reset");
+  openChangePwdBtn.addEventListener("click", () => {
+    setMode("change");
+    authCurrentPasswordInput.value = "";
+    authPasswordInput.value = "";
     openModal(authModal);
   });
 
   closeAuthModalBtn.addEventListener("click", () => closeModal(authModal));
 
-  copyRecoveryKeyBtn.addEventListener("click", async () => {
-    await navigator.clipboard.writeText(recoveryKeyValue.textContent);
-    copyRecoveryKeyBtn.textContent = "Copied!";
-    setTimeout(() => (copyRecoveryKeyBtn.textContent = "Copy"), 2000);
+  [authEmailInput, authCurrentPasswordInput, authPasswordInput].forEach((input) => {
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        submitAuthBtn.click();
+      }
+    });
   });
 
   submitAuthBtn.addEventListener("click", async () => {
-    clearAuthFeedback();
+    clearFeedback();
+
+    const email = authEmailInput.value.trim();
+    const password = authPasswordInput.value;
+    const currentPassword = authCurrentPasswordInput.value;
+
     submitAuthBtn.disabled = true;
+    const originalLabel = submitAuthBtn.textContent;
+    submitAuthBtn.textContent = "Working...";
 
     try {
-      const formData = new FormData();
-      const targetUser = (currentUser && authMode === "reset")
-        ? currentUser
-        : authUsernameInput.value.trim();
-
-      formData.append("username", targetUser);
-
-      if (authMode === "reset") {
-        formData.append("action", "reset_password");
-        formData.append("new_password", authPasswordInput.value);
-        formData.append("recovery_key", authRecoveryKeyInput.value.trim());
-      } else {
-        formData.append("action", authMode);
-        formData.append("password", authPasswordInput.value);
-      }
-
-      const res = await fetch("auth.php", { method: "POST", body: formData });
-      const rawText = await res.text();
-      let data;
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        throw new Error(`Server returned HTTP ${res.status} (non-JSON).`);
-      }
-
-      if (!res.ok || !data.success) {
-        const err = new Error(data.error || "Authentication failed");
-        err.code = data.error_code || "";
-        throw err;
-      }
-
-      currentUser = data.username;
-      authPasswordInput.value = "";
-      authRecoveryKeyInput.value = "";
-      updateAuthUI();
-
-      // If registering or resetting password, show the new recovery key before closing
-      if (data.recovery_key) {
-        recoveryKeyTitle.textContent = authMode === "register"
-          ? "Account Created! Save Your Recovery Key:"
-          : "Password Updated! Save Your New Recovery Key:";
-        recoveryKeyValue.textContent = data.recovery_key;
-        recoveryKeyBox.style.display = "block";
-        submitAuthBtn.style.display = "none";
-      } else {
+      if (mode === "login") {
+        const data = await api("login", { email, password });
+        applyStatus(data);
+        authPasswordInput.value = "";
         closeModal(authModal);
+      } else if (mode === "register") {
+        const data = await api("register", { email, password });
+        if (data.logged_in) applyStatus(data);
+        authPasswordInput.value = "";
+        showNotice(data.message || "Check your inbox to confirm your address.");
+      } else if (mode === "forgot") {
+        const data = await api("forgot", { email });
+        showNotice(data.message || "If that address has an account, we sent a reset link.");
+      } else if (mode === "change") {
+        const data = await api("change_password", {
+          current_password: currentPassword,
+          new_password: password,
+        });
+        authCurrentPasswordInput.value = "";
+        authPasswordInput.value = "";
+        showNotice(data.message || "Password updated.");
       }
     } catch (err) {
-      authErrorMsg.textContent = err.message;
-      authErrorBox.style.display = "block";
-      if (err.code === "WRONG_PASSWORD") {
-        inlineResetTriggerBtn.style.display = "inline-block";
+      showError(err.message);
+      if (err.code === "EMAIL_UNVERIFIED" && state.user) {
+        state.user.verified = false;
+        updateUI();
       }
     } finally {
       submitAuthBtn.disabled = false;
+      submitAuthBtn.textContent = originalLabel;
     }
   });
 
   logoutBtn.addEventListener("click", async () => {
-    await fetch("auth.php?action=logout");
-    currentUser = null;
-    updateAuthUI();
+    try {
+      await api("logout");
+    } catch (err) {
+      console.warn("Logout failed:", err);
+    }
+    state.user = null;
+    state.csrf = null;
+    updateUI();
+    await checkSessionStatus();
   });
 
+  resendVerifyBtn.addEventListener("click", async () => {
+    resendVerifyBtn.disabled = true;
+    const originalLabel = resendVerifyBtn.textContent;
+    resendVerifyBtn.textContent = "Sending...";
+    try {
+      await api("resend_verification");
+      resendVerifyBtn.textContent = "Sent!";
+      setTimeout(() => (resendVerifyBtn.textContent = originalLabel), 2500);
+    } catch (err) {
+      resendVerifyBtn.textContent = originalLabel;
+      alert(err.message);
+    } finally {
+      resendVerifyBtn.disabled = false;
+    }
+  });
+
+  /* --------------------------------------------------------------- save -- */
   openSaveModalBtn.addEventListener("click", () => {
-    if (!currentUser) {
-      setAuthMode("login");
+    if (!state.user) {
+      setMode("login");
       openModal(authModal);
       return;
     }
     shareResultBox.style.display = "none";
-    lockedDirDisplay.textContent = `/trip/${currentUser}/`;
+    lockedDirDisplay.textContent = `/trip/${state.user.folderSlug}/`;
     openModal(saveModal);
   });
 
   closeSaveModalBtn.addEventListener("click", () => closeModal(saveModal));
+
   copySavedUrlBtn.addEventListener("click", async () => {
     await navigator.clipboard.writeText(generatedShareUrl.value);
     copySavedUrlBtn.textContent = "Copied!";
@@ -262,9 +352,9 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
   });
 
   async function saveToDirectory(saveMode) {
-    if (!currentUser) {
+    if (!state.user) {
       closeModal(saveModal);
-      setAuthMode("login");
+      setMode("login");
       openModal(authModal);
       return;
     }
@@ -300,7 +390,13 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
         if (attached === 0) throw new Error("No image blobs available to upload.");
       }
 
-      const res = await fetch("save_trip.php", { method: "POST", body: formData });
+      const headers = state.csrf ? { "X-CSRF-Token": state.csrf } : {};
+      const res = await fetch("save_trip.php", {
+        method: "POST",
+        body: formData,
+        headers,
+        credentials: "same-origin",
+      });
       const rawText = await res.text();
       let data;
       try {
@@ -310,7 +406,9 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
       }
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Upload failed");
+        const err = new Error(data.error || "Upload failed");
+        err.code = data.error_code || "";
+        throw err;
       }
 
       shareResultBox.style.display = "flex";
@@ -324,11 +422,15 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
         downloadHostedKmzLink.style.display = "inline";
         window.history.replaceState({}, "", `/?kmz=${encodeURIComponent(data.kmz_path)}`);
       } else {
-        statusHeader.textContent = `Saved ${data.saved_photos.length} image(s) to /trip/${currentUser}/${tripSlug}/`;
-        generatedShareUrl.value = `${window.location.origin}/trip/${currentUser}/${tripSlug}/`;
+        statusHeader.textContent = `Saved ${data.saved_photos.length} image(s) to /trip/${data.folder_slug}/${tripSlug}/`;
+        generatedShareUrl.value = `${window.location.origin}/trip/${data.folder_slug}/${tripSlug}/`;
         downloadHostedKmzLink.style.display = "none";
       }
     } catch (err) {
+      if (err.code === "EMAIL_UNVERIFIED" && state.user) {
+        state.user.verified = false;
+        updateUI();
+      }
       alert(`Save failed: ${err.message}`);
     } finally {
       saveKmzOnlyBtn.disabled = false;
@@ -340,15 +442,18 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
   saveKmzOnlyBtn.addEventListener("click", () => saveToDirectory("kmz_only"));
   saveImagesOnlyBtn.addEventListener("click", () => saveToDirectory("images_only"));
 
+  /* ---------------------------------------------------------- my trips -- */
   closeMyTripsBtn.addEventListener("click", () => closeModal(myTripsModal));
 
   async function fetchAndRenderMyTrips() {
-    if (!currentUser) return;
-    myTripsDirLabel.textContent = `/trip/${currentUser}/`;
+    if (!state.user) return;
+
+    const folderSlug = state.user.folderSlug;
+    myTripsDirLabel.textContent = `/trip/${folderSlug}/`;
     myTripsList.innerHTML = `<p style="font-size: 0.85rem; color: #5f6368;">Loading saved trips...</p>`;
 
     try {
-      const res = await fetch("my_trips.php?action=list");
+      const res = await fetch("my_trips.php?action=list", { credentials: "same-origin" });
       const rawText = await res.text();
       let data;
       try {
@@ -362,7 +467,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
       }
 
       if (!data.trips.length) {
-        myTripsList.innerHTML = `<p style="font-size: 0.85rem; color: #5f6368; padding: 12px 0;">No trips saved yet in <code>/trip/${escapeHtml(currentUser)}/</code>. Upload photos and click <b>Save to Site</b> to store your first trip.</p>`;
+        myTripsList.innerHTML = `<p style="font-size: 0.85rem; color: #5f6368; padding: 12px 0;">No trips saved yet in <code>/trip/${escapeHtml(folderSlug)}/</code>. Upload photos and click <b>Save to Site</b> to store your first trip.</p>`;
         return;
       }
 
@@ -406,14 +511,20 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
         delBtn.textContent = "Delete";
         delBtn.style.cssText = "padding:6px 10px; font-size:0.8rem; color:#d93025; border-color:#f5c2c7;";
         delBtn.addEventListener("click", async () => {
-          if (!confirm(`Delete "${trip.slug}" permanently from /trip/${currentUser}/?`)) return;
+          if (!confirm(`Delete "${trip.slug}" permanently from /trip/${folderSlug}/?`)) return;
           delBtn.disabled = true;
           delBtn.textContent = "Deleting...";
           try {
             const formData = new FormData();
             formData.append("action", "delete");
             formData.append("slug", trip.slug);
-            const delRes = await fetch("my_trips.php", { method: "POST", body: formData });
+            const headers = state.csrf ? { "X-CSRF-Token": state.csrf } : {};
+            const delRes = await fetch("my_trips.php", {
+              method: "POST",
+              body: formData,
+              headers,
+              credentials: "same-origin",
+            });
             const delData = await delRes.json();
             if (!delRes.ok || !delData.success) {
               throw new Error(delData.error || "Delete failed");
@@ -440,7 +551,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
   }
 
   openMyTripsBtn.addEventListener("click", () => {
-    if (!currentUser) return;
+    if (!state.user) return;
     openModal(myTripsModal);
     fetchAndRenderMyTrips();
   });
