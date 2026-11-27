@@ -5,3 +5,8 @@ personal-access.token
 #*.kmz
 *.kml
 __pycache__/
+
+# Runtime data (accounts, uploads, usage logs)
+users/
+trip/
+stats/

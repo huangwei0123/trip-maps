@@ -3,6 +3,8 @@ error_reporting(0);
 session_start();
 header('Content-Type: application/json');
 
+require_once __DIR__ . '/lib/usage.php';
+
 $usersDir = __DIR__ . '/users';
 if (!is_dir($usersDir)) {
     @mkdir($usersDir, 0755, true);
@@ -21,6 +23,7 @@ if ($action === 'status') {
 }
 
 if ($action === 'logout') {
+    usage_log('logout', $_SESSION['username'] ?? '');
     session_destroy();
     echo json_encode(['success' => true]);
     exit;
@@ -75,6 +78,9 @@ if ($action === 'register') {
     session_regenerate_id(true);
     $_SESSION['username'] = $username;
 
+    usage_log('register', $username);
+    usage_log('login', $username, ['via' => 'register']);
+
     echo json_encode([
         'success' => true,
         'username' => $username,
@@ -113,6 +119,8 @@ if ($action === 'login') {
 
     session_regenerate_id(true);
     $_SESSION['username'] = $username;
+
+    usage_log('login', $username);
 
     echo json_encode(['success' => true, 'username' => $username]);
     exit;
@@ -161,6 +169,9 @@ if ($action === 'reset_password') {
 
     session_regenerate_id(true);
     $_SESSION['username'] = $username;
+
+    usage_log('password_reset', $username);
+    usage_log('login', $username, ['via' => 'password_reset']);
 
     echo json_encode([
         'success' => true,

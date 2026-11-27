@@ -2,6 +2,8 @@
 session_start();
 header('Content-Type: application/json');
 
+require_once __DIR__ . '/lib/usage.php';
+
 function emailToFolderSlug(string $email): string {
     $slug = str_replace('@', '_at_', strtolower(trim($email)));
     $slug = preg_replace('/[^a-z0-9_-]/', '_',$slug);
@@ -83,10 +85,23 @@ if ($action === 'delete') {
     }
 
     $files = array_diff(scandir($realTarget), ['.', '..']);
-    foreach ($files as$file) {
-        @unlink($realTarget . DIRECTORY_SEPARATOR . $file);
+    $freedBytes = 0;
+    $freedFiles = 0;
+    foreach ($files as $file) {
+        $filePath = $realTarget . DIRECTORY_SEPARATOR . $file;
+        if (is_file($filePath)) {
+            $freedBytes += (int) @filesize($filePath);
+            $freedFiles++;
+        }
+        @unlink($filePath);
     }
     rmdir($realTarget);
+
+    usage_log('trip_deleted', $_SESSION['username'], [
+        'trip' => $slug,
+        'bytes' => $freedBytes,
+        'files' => $freedFiles,
+    ]);
 
     echo json_encode(['success' => true, 'deleted_slug' => $slug]);
     exit;

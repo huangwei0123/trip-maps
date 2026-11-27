@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title>Usage Dashboard — PhotoOnMaps</title>
+
+  <meta name="theme-color" content="#1a73e8" />
+  <link rel="icon" href="icon.svg" />
+  <link href="styles.css?v=9" rel="stylesheet" />
+</head>
+<body class="usage-page">
+
+  <header>
+    <a class="brand" href="index.html">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1a73e8" stroke-width="2">
+        <path d="M8 3l4 8 5-5 5 15H2L8 3z"></path>
+      </svg>
+      <div class="brand-title">
+        <h1>Usage Dashboard</h1>
+        <span>Logins, storage & share links</span>
+      </div>
+    </a>
+
+    <div class="actions">
+      <span id="usageUserBadge" class="user-badge"></span>
+      <a class="header-link" href="index.html">&larr; Back to Map</a>
+    </div>
+  </header>
+
+  <main class="usage-main">
+    <div id="usageLoading" class="usage-note">Loading usage data&hellip;</div>
+    <div id="usageError" class="usage-error" style="display: none;"></div>
+
+    <div id="usageContent" class="usage-content" style="display: none;">
+      <section class="usage-cards" id="usageCards"></section>
+
+      <section class="usage-panel">
+        <div class="usage-panel-head">
+          <h2>People</h2>
+          <span id="usageScope" class="usage-scope"></span>
+        </div>
+        <div class="usage-table-wrap">
+          <table class="usage-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Last login</th>
+                <th title="Number of recorded sign-ins">Logins</th>
+                <th title="Share links created (tracked since this feature was added)">Links</th>
+                <th title="Trip folders on disk">Trips</th>
+                <th>Images</th>
+                <th>Storage</th>
+              </tr>
+            </thead>
+            <tbody id="usageTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="usage-panel">
+        <h2>Recent activity</h2>
+        <ul class="usage-activity" id="usageActivity"></ul>
+      </section>
+    </div>
+  </main>
+
+  <script type="module" src="js/usage.js?v=1"></script>
+</body>
+</html>

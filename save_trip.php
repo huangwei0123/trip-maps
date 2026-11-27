@@ -2,6 +2,8 @@
 session_start();
 header('Content-Type: application/json');
 
+require_once __DIR__ . '/lib/usage.php';
+
 function emailToFolderSlug(string $email): string {
     $slug = str_replace('@', '_at_', strtolower(trim($email)));
     $slug = preg_replace('/[^a-z0-9_-]/', '_', $slug);
@@ -87,6 +89,29 @@ if ($saveMode === 'images_only') {
         }
     }
 }
+
+// Track the share link that was just created and how many bytes it uses.
+$uploadedBytes = 0;
+if ($relativeKmzPath !== null) {
+    $absKmz = __DIR__ . '/' . $relativeKmzPath;
+    if (is_file($absKmz)) {
+        $uploadedBytes += (int) @filesize($absKmz);
+    }
+}
+foreach ($savedPhotos as $savedPhoto) {
+    $absPhoto = __DIR__ . '/' . $savedPhoto;
+    if (is_file($absPhoto)) {
+        $uploadedBytes += (int) @filesize($absPhoto);
+    }
+}
+
+usage_log('link_created', $_SESSION['username'], [
+    'trip' => $tripSlug,
+    'mode' => $saveMode,
+    'path' => $relativeKmzPath !== null ? $relativeKmzPath : "trip/$folderSlug/$tripSlug/",
+    'bytes' => $uploadedBytes,
+    'photos' => count($savedPhotos),
+]);
 
 echo json_encode([
     'success' => true,
