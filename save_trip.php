@@ -1,98 +1,122 @@
 <?php
-session_start();
-header('Content-Type: application/json');
+/**
+ * Save a trip (.KMZ or images) into the signed-in user's folder.
+ */
 
-function emailToFolderSlug(string $email): string {
-    $slug = str_replace('@', '_at_', strtolower(trim($email)));
-    $slug = preg_replace('/[^a-z0-9_-]/', '_', $slug);
-    $slug = preg_replace('/_+/', '_', $slug);
-    return trim($slug, '_');
+require_once __DIR__ . '/lib/bootstrap.php';
+require_once __DIR__ . '/lib/auth.php';
+
+boot_session();
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    json_fail('Method not allowed.', 405);
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(['success' => false, 'error' => 'Method not allowed']);
-    exit;
+// A confirmed address is required, so the site cannot be used as free file
+// storage by throwaway accounts.
+$user = require_verified();
+require_csrf();
+
+$folderSlug = (string) $user['folder_slug'];
+if (!preg_match('/^[a-z0-9_-]{1,64}$/', $folderSlug)) {
+    json_fail('Invalid user directory identifier.', 400);
 }
 
-// Enforce logged-in session
-if (empty($_SESSION['username'])) {
-    http_response_code(401);
-    echo json_encode(['success' => false, 'error' => 'Please log in or register before saving to the site.']);
-    exit;
+$tripSlug = preg_replace('/[^a-z0-9_-]/', '-', strtolower(trim((string) ($_POST['trip_slug'] ?? ''))));
+$tripSlug = trim((string) $tripSlug, '-');
+if ($tripSlug === '') {
+    $tripSlug = 'trip-' . time();
+}
+$tripSlug = substr($tripSlug, 0, 60);
+
+$saveMode = (string) ($_POST['save_mode'] ?? 'kmz_only');
+if (!in_array($saveMode, ['kmz_only', 'images_only'], true)) {
+    json_fail('Unknown save mode.', 400);
 }
 
-$rawFolder = $_SESSION['folder_slug'] ?? emailToFolderSlug($_SESSION['username']);
-$folderSlug = preg_replace('/[^a-z0-9_-]/', '', strtolower($rawFolder));
-if ($folderSlug === '') {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'error' => 'Invalid user directory identifier.']);
-    exit;
-}
-
-$tripSlug = preg_replace('/[^a-z0-9_-]/', '-', strtolower(trim($_POST['trip_slug'] ?? '')));
-$tripSlug = trim($tripSlug, '-') ?: 'trip-' . time();
-$saveMode = $_POST['save_mode'] ?? 'kmz_only'; // 'kmz_only' or 'images_only'
+$maxKmzBytes   = 64 * 1024 * 1024; // 64 MB
+$maxImageBytes = 16 * 1024 * 1024; // 16 MB per image
 
 // Locked strictly to /trip/<folderSlug>/<tripSlug>
 $tripDir = __DIR__ . '/trip/' . $folderSlug . '/' . $tripSlug;
 if (!is_dir($tripDir)) {
-    if (!mkdir($tripDir, 0755, true)) {
-        http_response_code(500);
-        echo json_encode(['success' => false, 'error' => 'Failed to create trip directory.']);
-        exit;
+    if (!@mkdir($tripDir, 0755, true) && !is_dir($tripDir)) {
+        json_fail('Failed to create trip directory.', 500);
     }
-    file_put_contents($tripDir . '/index.html', '<!doctype html><title>Trip Assets</title>');
+    @file_put_contents($tripDir . '/index.html', '<!doctype html><title>Trip Assets</title>');
 }
 
 $relativeKmzPath = null;
-$savedPhotos = [];
+$savedPhotos     = [];
 
 if ($saveMode === 'kmz_only') {
-    if (!isset($_FILES['kmz_file']) || $_FILES['kmz_file']['error'] !== UPLOAD_ERR_OK) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'error' => 'Missing or invalid KMZ file.']);
-        exit;
+    $file = $_FILES['kmz_file'] ?? null;
+
+    if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        json_fail('Missing or invalid KMZ file.');
+    }
+    if ((int) $file['size'] > $maxKmzBytes) {
+        json_fail('That KMZ file is too large (64 MB limit).');
+    }
+    if (strtolower(pathinfo((string) $file['name'], PATHINFO_EXTENSION)) !== 'kmz') {
+        json_fail('Only .kmz files are accepted.');
     }
 
     $kmzFilename = $tripSlug . '.kmz';
-    $kmzDest = $tripDir . '/' . $kmzFilename;
-    if (!move_uploaded_file($_FILES['kmz_file']['tmp_name'], $kmzDest)) {
-        http_response_code(500);
-        echo json_encode(['success' => false, 'error' => 'Failed to write KMZ file.']);
-        exit;
+    if (!move_uploaded_file($file['tmp_name'], $tripDir . '/' . $kmzFilename)) {
+        json_fail('Failed to write KMZ file.', 500);
     }
+
     $relativeKmzPath = "trip/$folderSlug/$tripSlug/$kmzFilename";
 }
 
 if ($saveMode === 'images_only') {
-    if (!isset($_FILES['photos']) || !is_array($_FILES['photos']['name'])) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'error' => 'No images uploaded.']);
-        exit;
+    $files = $_FILES['photos'] ?? null;
+
+    if (!is_array($files) || !is_array($files['name'] ?? null)) {
+        json_fail('No images uploaded.');
     }
 
-    $count = count($_FILES['photos']['name']);
+    $count = count($files['name']);
     for ($i = 0; $i < $count; $i++) {
-        if ($_FILES['photos']['error'][$i] === UPLOAD_ERR_OK) {
-            $origName = basename($_FILES['photos']['name'][$i]);
-            $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-            if (in_array($ext, ['jpg', 'jpeg', 'webp', 'png'])) {
-                $safePhoto = preg_replace('/[^a-zA-Z0-9._-]/', '_', $origName);
-                $photoDest = $tripDir . '/' . $safePhoto;
-                if (move_uploaded_file($_FILES['photos']['tmp_name'][$i], $photoDest)) {
-                    $savedPhotos[] = "trip/$folderSlug/$tripSlug/$safePhoto";
-                }
-            }
+        if (($files['error'][$i] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            continue;
         }
+        if ((int) $files['size'][$i] > $maxImageBytes) {
+            continue;
+        }
+
+        $tmp = (string) $files['tmp_name'][$i];
+        if (!is_uploaded_file($tmp) || @getimagesize($tmp) === false) {
+            continue; // not actually an image
+        }
+
+        $ext = strtolower(pathinfo((string) $files['name'][$i], PATHINFO_EXTENSION));
+        if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+            continue;
+        }
+
+        $safePhoto = preg_replace('/[^a-zA-Z0-9._-]/', '_', basename((string) $files['name'][$i]));
+        $safePhoto = substr((string) $safePhoto, 0, 120);
+        if ($safePhoto === '' || $safePhoto === '.' || $safePhoto === '..') {
+            continue;
+        }
+
+        if (move_uploaded_file($tmp, $tripDir . '/' . $safePhoto)) {
+            $savedPhotos[] = "trip/$folderSlug/$tripSlug/$safePhoto";
+        }
+    }
+
+    if (!$savedPhotos) {
+        json_fail('No valid images were saved.');
     }
 }
 
-echo json_encode([
-    'success' => true,
-    'username' => $_SESSION['username'],
-    'folder_slug' => $folderSlug,
-    'save_mode' => $saveMode,
-    'kmz_path' => $relativeKmzPath,
-    'saved_photos' => $savedPhotos
+json_out([
+    'success'      => true,
+    'email'        => $user['email'],
+    'folder_slug'  => $folderSlug,
+    'save_mode'    => $saveMode,
+    'kmz_path'     => $relativeKmzPath,
+    'saved_photos' => $savedPhotos,
 ]);

@@ -1,4 +1,4 @@
-const CACHE_NAME = "photoonmaps-v3";
+const CACHE_NAME = "photoonmaps-v4";
 
 const APP_SHELL_ASSETS = [
   "./",

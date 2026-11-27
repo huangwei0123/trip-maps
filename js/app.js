@@ -6,7 +6,7 @@ import {
   resolveKmzFetchUrl
 } from "./kmz.js";
 import { createMapController } from "./map.js";
-import { initAccountSystem } from "./auth.js?v=8";
+import { initAccountSystem } from "./auth.js?v=9";
 
 const DEFAULT_DEMO_KMZ = "examples/sanitas-20261121.kmz";
 const FEATURED_PHOTO_NAME = "IMG_8882.JPEG";
@@ -423,16 +423,7 @@ const account = initAccountSystem({
   }
 });
 
-function configureEmailInputs() {
-  document.querySelectorAll('input[name="username"], #authUsername, #loginUsername').forEach((input) => {
-    input.type = "email";
-    input.autocomplete = "email";
-    input.placeholder = "you@example.com";
-  });
-}
-
 window.addEventListener("DOMContentLoaded", () => {
-  configureEmailInputs();
   account.checkSessionStatus();
   const params = new URLSearchParams(window.location.search);
   const kmzParam = params.get("kmz");
