@@ -6,11 +6,12 @@ personal-access.token
 *.kml
 __pycache__/
 
-# Local / production configuration (contains DB and SMTP secrets)
+# Runtime data (legacy accounts, uploads, usage logs)
+users/
+trip/
+stats/
+
+# Local config & secrets
 config.php
 photoonmaps-config.php
 .env
-
-# User data created at runtime
-users/
-trip/

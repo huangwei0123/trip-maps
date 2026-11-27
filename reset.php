@@ -10,6 +10,7 @@ require_once __DIR__ . '/lib/bootstrap.php';
 require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/password.php';
 require_once __DIR__ . '/lib/page.php';
+require_once __DIR__ . '/lib/usage.php';
 
 boot_session();
 
@@ -31,7 +32,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $password = (string) ($_POST['password'] ?? '');
     $confirm  = (string) ($_POST['confirm'] ?? '');
 
-    $st = db()->prepare('SELECT id, email, email_norm, session_version FROM users WHERE id = ? LIMIT 1');
+    $st = db()->prepare('SELECT id, email, email_norm, folder_slug, session_version FROM users WHERE id = ? LIMIT 1');
     $st->execute([(int) $row['user_id']]);
     $user = $st->fetch();
 
@@ -81,6 +82,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         if ($error === '') {
             // Using the emailed link proves control of the mailbox, so sign in.
             login_user(['id' => (int) $user['id'], 'session_version' => $newVersion]);
+
+            usage_log('password_reset', (string) $user['folder_slug'], ['via' => 'reset_link']);
+            usage_log('login', (string) $user['folder_slug'], ['via' => 'reset_link']);
 
             page_start('Password updated');
             echo '<h1>Password updated</h1>';

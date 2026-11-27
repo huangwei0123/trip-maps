@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/lib/bootstrap.php';
 require_once __DIR__ . '/lib/auth.php';
+require_once __DIR__ . '/lib/usage.php';
 
 boot_session();
 
@@ -88,10 +89,23 @@ if ($action === 'delete') {
     }
 
     $files = array_diff(scandir($realTarget) ?: [], ['.', '..']);
+    $freedBytes = 0;
+    $freedFiles = 0;
     foreach ($files as $file) {
-        @unlink($realTarget . DIRECTORY_SEPARATOR . $file);
+        $filePath = $realTarget . DIRECTORY_SEPARATOR . $file;
+        if (is_file($filePath)) {
+            $freedBytes += (int) @filesize($filePath);
+            $freedFiles++;
+        }
+        @unlink($filePath);
     }
     @rmdir($realTarget);
+
+    usage_log('trip_deleted', $folderSlug, [
+        'trip'  => $slug,
+        'bytes' => $freedBytes,
+        'files' => $freedFiles,
+    ]);
 
     json_out(['success' => true, 'deleted_slug' => $slug]);
 }

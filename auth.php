@@ -11,6 +11,7 @@ require_once __DIR__ . '/lib/bootstrap.php';
 require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/password.php';
 require_once __DIR__ . '/lib/mailer.php';
+require_once __DIR__ . '/lib/usage.php';
 
 boot_session();
 
@@ -123,6 +124,9 @@ try {
             // Sign them in so the app can show a "confirm your email" banner.
             login_user(['id' => $userId, 'session_version' => 1]);
 
+            usage_log('register', $slug);
+            usage_log('login', $slug, ['via' => 'register']);
+
             json_out([
                 'success'        => true,
                 'message'        => $generic,
@@ -175,6 +179,8 @@ try {
             throttle_clear($emailBucket, 'login');
             login_user($user);
 
+            usage_log('login', (string) $user['folder_slug']);
+
             json_out([
                 'success'        => true,
                 'logged_in'      => true,
@@ -188,6 +194,10 @@ try {
         /* ------------------------------------------------------- logout -- */
         case 'logout': {
             require_csrf();
+
+            $currentUser = current_user();
+            usage_log('logout', $currentUser['folder_slug'] ?? '');
+
             logout_user();
             json_out(['success' => true]);
         }
@@ -252,6 +262,8 @@ try {
             // Keep this session alive, invalidate every other one.
             $_SESSION['session_version'] = $newVersion;
             forget_current_user();
+
+            usage_log('password_reset', (string) $user['folder_slug'], ['via' => 'change_password']);
 
             json_out(['success' => true, 'message' => 'Password updated. Other devices have been signed out.']);
         }

@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/lib/bootstrap.php';
 require_once __DIR__ . '/lib/auth.php';
+require_once __DIR__ . '/lib/usage.php';
 
 boot_session();
 
@@ -111,6 +112,29 @@ if ($saveMode === 'images_only') {
         json_fail('No valid images were saved.');
     }
 }
+
+// Track the share link that was just created and how many bytes it uses.
+$uploadedBytes = 0;
+if ($relativeKmzPath !== null) {
+    $absKmz = __DIR__ . '/' . $relativeKmzPath;
+    if (is_file($absKmz)) {
+        $uploadedBytes += (int) @filesize($absKmz);
+    }
+}
+foreach ($savedPhotos as $savedPhoto) {
+    $absPhoto = __DIR__ . '/' . $savedPhoto;
+    if (is_file($absPhoto)) {
+        $uploadedBytes += (int) @filesize($absPhoto);
+    }
+}
+
+usage_log('link_created', $folderSlug, [
+    'trip'   => $tripSlug,
+    'mode'   => $saveMode,
+    'path'   => $relativeKmzPath !== null ? $relativeKmzPath : "trip/$folderSlug/$tripSlug/",
+    'bytes'  => $uploadedBytes,
+    'photos' => count($savedPhotos),
+]);
 
 json_out([
     'success'      => true,
