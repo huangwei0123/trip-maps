@@ -1,2 +1,2 @@
-# trip-maps
-# trip-maps
+# photoonmaps: https://www.photoonmaps.com
+# Display photos on Google Earth.
