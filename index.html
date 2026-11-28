@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-US">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -13,42 +13,63 @@
   <link rel="apple-touch-icon" href="icon-512.png" />
 
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
-  <link href="styles.css?v=9" rel="stylesheet" />
+  <link href="styles.css?v=13" rel="stylesheet" />
 </head>
 <body>
 
-  <header>
-    <div class="brand">
+  <header class="app-header">
+    <div class="header-nav-row">
+      <a class="brand-mark" href="index.html" aria-label="PhotoOnMaps home" title="PhotoOnMaps">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1a73e8" stroke-width="2">
         <path d="M8 3l4 8 5-5 5 15H2L8 3z"></path>
       </svg>
-      <div class="brand-title">
-        <h1 id="pageTitle">PhotoOnMaps.com</h1>
-        <span>3D Photo Map & Google Earth KMZ Generator</span>
-      </div>
+      </a>
+
+      <nav class="primary-nav" aria-label="Main navigation">
+        <button id="openMyTripsBtn" class="secondary" style="display: none;">My Trips</button>
+
+        <details class="nav-dropdown">
+          <summary class="dropdown-trigger secondary">Service <span aria-hidden="true">▾</span></summary>
+          <div class="dropdown-menu">
+            <a class="dropdown-item" href="usage.html">Usage</a>
+            <a class="dropdown-item" href="user-guide.html">User Guide</a>
+            <button id="openBillingBtn" class="dropdown-item" type="button">Subscription plan</button>
+          </div>
+        </details>
+
+        <button id="openAuthModalBtn" class="secondary">Login / Register</button>
+        <details id="accountDropdown" class="nav-dropdown account-dropdown" style="display: none;">
+          <summary class="account-trigger" aria-label="Account menu">
+            <span id="accountAvatar" class="account-avatar" aria-hidden="true">U</span>
+            <span id="userBadge" class="account-name"></span>
+            <span class="account-chevron" aria-hidden="true">▾</span>
+          </summary>
+          <div class="dropdown-menu dropdown-menu-right">
+            <div id="accountMenuEmail" class="dropdown-account-email"></div>
+            <button id="logoutBtn" class="dropdown-item dropdown-danger" type="button">Log out</button>
+          </div>
+        </details>
+      </nav>
     </div>
 
-    <div class="actions">
-      <label class="checkbox-label">
-        <input type="checkbox" id="terrain3dCheckbox" checked />
-        3D Terrain
-      </label>
-      <label class="checkbox-label">
-        <input type="checkbox" id="connectPathCheckbox" checked />
-        Connect path
-      </label>
-      <button id="loadDemoBtn" class="secondary">Demo Hike</button>
-      <button id="resetViewBtn" class="secondary" disabled>Reset 3D View</button>
-      <span id="userBadge" style="font-size: 0.83rem; font-weight: 600; color: #174ea6; display: none;"></span>
-      <button id="openAuthModalBtn" class="secondary">Login / Register</button>
-      <button id="openMyTripsBtn" class="secondary" style="display: none;">My Trips</button>
-      <button id="openUsageBtn" class="secondary" style="display: none;">Usage</button>
-      <button id="openChangePwdBtn" class="secondary" style="display: none;">Change Password</button>
-      <button id="openBillingBtn" class="secondary">Plans &amp; Storage</button>
-      <button id="logoutBtn" class="secondary" style="display: none;">Logout</button>
-      <button id="openSaveModalBtn" class="save-btn" disabled>Save to Site</button>
-      <button id="downloadKmzBtn" disabled>Download .KMZ</button>
-      <button id="clearBtn" class="secondary" disabled>Clear</button>
+    <div class="toolbar-row" aria-label="Map controls">
+      <div class="toolbar-options">
+        <label class="checkbox-label">
+          <input type="checkbox" id="terrain3dCheckbox" checked />
+          3D Terrain
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="connectPathCheckbox" checked />
+          Connect path
+        </label>
+      </div>
+      <div class="toolbar-actions">
+        <button id="loadDemoBtn" class="secondary">Demo Hike</button>
+        <button id="resetViewBtn" class="secondary" disabled>Reset 3D View</button>
+        <button id="openSaveModalBtn" class="save-btn" disabled>Save to Site</button>
+        <button id="downloadKmzBtn" disabled>Download .KMZ</button>
+        <button id="clearBtn" class="secondary" disabled>Clear</button>
+      </div>
     </div>
   </header>
 
@@ -59,8 +80,17 @@
   </div>
 
   <div class="workspace">
-    <aside class="sidebar">
+    <aside class="sidebar" id="photoSidebar">
       <div class="hero-card">
+        <div class="sidebar-brand">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1a73e8" stroke-width="2" aria-hidden="true">
+            <path d="M8 3l4 8 5-5 5 15H2L8 3z"></path>
+          </svg>
+          <div class="brand-title">
+            <h1 id="pageTitle">PhotoOnMaps.com</h1>
+            <span>3D Photo Map &amp; Google Earth KMZ Generator</span>
+          </div>
+        </div>
         <h2>Input your photos from desktop or phone, and view on Google Earth</h2>
         <p>Select geotagged photos below to plot your route in 3D, save them in your own folder on our site, or download a <b>.KMZ</b> for Google Earth.</p>
       </div>
@@ -94,6 +124,32 @@
     </aside>
 
     <div class="map-container">
+      <div class="map-style-control">
+        <details id="basemapMenu" class="nav-dropdown basemap-menu">
+          <summary class="dropdown-trigger secondary" aria-label="Choose map background">
+            Map: <strong id="basemapCurrentLabel">Satellite</strong> <span aria-hidden="true">▾</span>
+          </summary>
+          <div class="dropdown-menu">
+            <button class="dropdown-item" type="button" data-basemap="satellite" aria-pressed="true">Satellite</button>
+            <button class="dropdown-item" type="button" data-basemap="streets" aria-pressed="false">City Streets</button>
+            <button class="dropdown-item" type="button" data-basemap="topographic" aria-pressed="false">Terrain / Topographic</button>
+            <button class="dropdown-item" type="button" data-basemap="light" aria-pressed="false">Light Gray</button>
+            <button class="dropdown-item" type="button" data-basemap="dark" aria-pressed="false">Dark Gray</button>
+          </div>
+        </details>
+      </div>
+      <button
+        id="toggleSidebarBtn"
+        class="sidebar-toggle"
+        type="button"
+        aria-label="Collapse photo panel"
+        aria-controls="photoSidebar"
+        aria-expanded="true"
+        title="Collapse photo panel"
+      >
+        <span class="sidebar-toggle-icon" aria-hidden="true">‹</span>
+        <span class="sidebar-toggle-text">Hide panel</span>
+      </button>
       <main id="map"></main>
       <div class="map-hint">Tip: Hold <b>Ctrl + Drag</b> (or Right-Click + Drag) to tilt & rotate 3D mountains</div>
     </div>
@@ -115,11 +171,6 @@
       <div class="field-group" id="authEmailGroup">
         <label for="authEmailInput">Email address</label>
         <input type="email" id="authEmailInput" placeholder="you@example.com" autocomplete="email" />
-      </div>
-
-      <div class="field-group" id="authCurrentPasswordGroup" style="display: none;">
-        <label for="authCurrentPasswordInput">Current password</label>
-        <input type="password" id="authCurrentPasswordInput" autocomplete="current-password" />
       </div>
 
       <div class="field-group" id="authPasswordGroup">
@@ -235,6 +286,6 @@
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-  <script type="module" src="js/app.js?v=10"></script>
+  <script type="module" src="js/app.js?v=13"></script>
 </body>
 </html>

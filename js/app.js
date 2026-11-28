@@ -5,8 +5,8 @@ import {
   resizeImageToBlob,
   resolveKmzFetchUrl
 } from "./kmz.js";
-import { createMapController } from "./map.js";
-import { initAccountSystem } from "./auth.js?v=10";
+import { createMapController } from "./map.js?v=2";
+import { initAccountSystem } from "./auth.js?v=11";
 
 const DEFAULT_DEMO_KMZ = "examples/sanitas-20261121.kmz";
 const FEATURED_PHOTO_NAME = "IMG_8882.JPEG";
@@ -31,6 +31,10 @@ const clearBtn = document.getElementById("clearBtn");
 const removeNoGpsBtn = document.getElementById("removeNoGpsBtn");
 const connectPathCheckbox = document.getElementById("connectPathCheckbox");
 const terrain3dCheckbox = document.getElementById("terrain3dCheckbox");
+const basemapMenu = document.getElementById("basemapMenu");
+const basemapCurrentLabel = document.getElementById("basemapCurrentLabel");
+const photoSidebar = document.getElementById("photoSidebar");
+const toggleSidebarBtn = document.getElementById("toggleSidebarBtn");
 
 function getActivePhotos() {
   return geotaggedPhotos.filter((p) => p.enabled !== false);
@@ -97,6 +101,20 @@ const mapCtrl = createMapController({
   onPinSelect: (photo) => {
     highlightSidebarItem(photo ? photo.id : null);
   }
+});
+
+toggleSidebarBtn.addEventListener("click", () => {
+  const collapsed = photoSidebar.classList.toggle("is-collapsed");
+  const action = collapsed ? "Show" : "Hide";
+  const panelName = "photo panel";
+
+  toggleSidebarBtn.setAttribute("aria-expanded", String(!collapsed));
+  toggleSidebarBtn.setAttribute("aria-label", `${action} ${panelName}`);
+  toggleSidebarBtn.title = `${action} ${panelName}`;
+  toggleSidebarBtn.querySelector(".sidebar-toggle-icon").textContent = collapsed ? "›" : "‹";
+  toggleSidebarBtn.querySelector(".sidebar-toggle-text").textContent = collapsed ? "Show panel" : "Hide panel";
+
+  window.requestAnimationFrame(() => mapCtrl.resize());
 });
 
 mapCtrl.onLoad(() => {
@@ -369,6 +387,18 @@ connectPathCheckbox.addEventListener("change", () => {
 
 terrain3dCheckbox.addEventListener("change", () => {
   mapCtrl.setTerrain3D(terrain3dCheckbox.checked);
+});
+
+basemapMenu.querySelectorAll("[data-basemap]").forEach((option) => {
+  option.addEventListener("click", () => {
+    const selectedBasemap = option.dataset.basemap;
+    mapCtrl.setBasemap(selectedBasemap);
+    basemapCurrentLabel.textContent = option.textContent.trim();
+    basemapMenu.querySelectorAll("[data-basemap]").forEach((item) => {
+      item.setAttribute("aria-pressed", String(item === option));
+    });
+    basemapMenu.open = false;
+  });
 });
 
 resetViewBtn.addEventListener("click", () => {

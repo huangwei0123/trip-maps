@@ -1,10 +1,11 @@
-const CACHE_NAME = "photoonmaps-v5";
+const CACHE_NAME = "photoonmaps-v8";
 
 const APP_SHELL_ASSETS = [
   "./",
   "index.html",
   "viewer.html",
   "usage.html",
+  "user-guide.html",
   "styles.css",
   "manifest.json",
   "js/app.js",

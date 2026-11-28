@@ -9,14 +9,15 @@ import { buildKmzBlob, escapeHtml } from "./kmz.js";
  */
 export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoadSavedKmz }) {
   const state = { user: null, csrf: null, billing: null };
-  let mode = "login"; // 'login' | 'register' | 'forgot' | 'change'
+  let mode = "login"; // 'login' | 'register' | 'forgot'
 
   /* ---------------------------------------------------------- elements -- */
   const userBadge = document.getElementById("userBadge");
+  const accountAvatar = document.getElementById("accountAvatar");
+  const accountMenuEmail = document.getElementById("accountMenuEmail");
+  const accountDropdown = document.getElementById("accountDropdown");
   const openAuthModalBtn = document.getElementById("openAuthModalBtn");
   const openMyTripsBtn = document.getElementById("openMyTripsBtn");
-  const openUsageBtn = document.getElementById("openUsageBtn");
-  const openChangePwdBtn = document.getElementById("openChangePwdBtn");
   const openBillingBtn = document.getElementById("openBillingBtn");
   const logoutBtn = document.getElementById("logoutBtn");
   const openSaveModalBtn = document.getElementById("openSaveModalBtn");
@@ -32,8 +33,6 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
   const authEmailGroup = document.getElementById("authEmailGroup");
   const authEmailInput = document.getElementById("authEmailInput");
-  const authCurrentPasswordGroup = document.getElementById("authCurrentPasswordGroup");
-  const authCurrentPasswordInput = document.getElementById("authCurrentPasswordInput");
   const authPasswordGroup = document.getElementById("authPasswordGroup");
   const authPasswordLabel = document.getElementById("authPasswordLabel");
   const authPasswordInput = document.getElementById("authPasswordInput");
@@ -276,29 +275,34 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
     if (user) {
       userBadge.textContent = user.email;
       userBadge.title = user.folderSlug ? `/trip/${user.folderSlug}/` : "";
-      userBadge.style.display = "inline";
-      userBadge.style.maxWidth = "190px";
-      userBadge.style.overflow = "hidden";
-      userBadge.style.textOverflow = "ellipsis";
-      userBadge.style.whiteSpace = "nowrap";
+      accountAvatar.textContent = (user.email || "U").trim().charAt(0).toUpperCase();
+      accountAvatar.title = user.email;
+      accountMenuEmail.textContent = user.email;
 
       openAuthModalBtn.style.display = "none";
       openMyTripsBtn.style.display = "inline-block";
-      if (openUsageBtn) openUsageBtn.style.display = "inline-block";
-      openChangePwdBtn.style.display = "inline-block";
-      logoutBtn.style.display = "inline-block";
+      accountDropdown.style.display = "inline-block";
       verifyBanner.style.display = user.verified ? "none" : "flex";
     } else {
-      userBadge.style.display = "none";
       openAuthModalBtn.style.display = "inline-block";
       openMyTripsBtn.style.display = "none";
-      if (openUsageBtn) openUsageBtn.style.display = "none";
-      openChangePwdBtn.style.display = "none";
-      logoutBtn.style.display = "none";
+      accountDropdown.open = false;
+      accountDropdown.style.display = "none";
       verifyBanner.style.display = "none";
     }
     renderBilling();
   }
+
+  document.addEventListener("click", (event) => {
+    const menuItem = event.target.closest(".dropdown-item");
+    if (menuItem) {
+      const owner = menuItem.closest(".nav-dropdown");
+      if (owner) owner.open = false;
+    }
+    document.querySelectorAll(".nav-dropdown[open]").forEach((dropdown) => {
+      if (!dropdown.contains(event.target)) dropdown.open = false;
+    });
+  });
 
   function setMode(next) {
     mode = next;
@@ -309,7 +313,6 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
     const showEmail = next === "login" || next === "register" || next === "forgot";
     authEmailGroup.style.display = showEmail ? "flex" : "none";
-    authCurrentPasswordGroup.style.display = next === "change" ? "flex" : "none";
     authPasswordGroup.style.display = next === "forgot" ? "none" : "flex";
     forgotPasswordRow.style.display = next === "login" ? "block" : "none";
 
@@ -334,15 +337,6 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
       authModalSubtext.textContent =
         "Enter the email address on your account and we'll send you a link to choose a new password.";
       submitAuthBtn.textContent = "Send Reset Link";
-    } else if (next === "change") {
-      authModalHeading.textContent = "Change Password";
-      authModalSubtext.textContent = state.user
-        ? `Signed in as ${state.user.email}. Enter your current password to set a new one.`
-        : "Enter your current password to set a new one.";
-      authPasswordLabel.textContent = "New Password (min 10 characters)";
-      authPasswordInput.placeholder = "Choose a new password";
-      authPasswordInput.autocomplete = "new-password";
-      submitAuthBtn.textContent = "Save New Password";
     }
   }
 
@@ -397,13 +391,6 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
   openAuthModalBtn.addEventListener("click", () => {
     setMode("login");
-    openModal(authModal);
-  });
-
-  openChangePwdBtn.addEventListener("click", () => {
-    setMode("change");
-    authCurrentPasswordInput.value = "";
-    authPasswordInput.value = "";
     openModal(authModal);
   });
 
@@ -465,7 +452,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
     }
   });
 
-  [authEmailInput, authCurrentPasswordInput, authPasswordInput].forEach((input) => {
+  [authEmailInput, authPasswordInput].forEach((input) => {
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
@@ -479,8 +466,6 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
     const email = authEmailInput.value.trim();
     const password = authPasswordInput.value;
-    const currentPassword = authCurrentPasswordInput.value;
-
     submitAuthBtn.disabled = true;
     const originalLabel = submitAuthBtn.textContent;
     submitAuthBtn.textContent = "Working...";
@@ -511,14 +496,6 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
       } else if (mode === "forgot") {
         const data = await api("forgot", { email });
         showNotice(data.message || "If that address has an account, we sent a reset link.");
-      } else if (mode === "change") {
-        const data = await api("change_password", {
-          current_password: currentPassword,
-          new_password: password,
-        });
-        authCurrentPasswordInput.value = "";
-        authPasswordInput.value = "";
-        showNotice(data.message || "Password updated.");
       }
     } catch (err) {
       showError(err.message);
@@ -814,12 +791,6 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
     openModal(myTripsModal);
     fetchAndRenderMyTrips();
   });
-
-  if (openUsageBtn) {
-    openUsageBtn.addEventListener("click", () => {
-      window.location.href = "usage.html";
-    });
-  }
 
   return { checkSessionStatus };
 }

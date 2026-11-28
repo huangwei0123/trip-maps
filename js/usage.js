@@ -22,7 +22,7 @@ function formatDateTime(value) {
   if (!value) return "—";
   const date = new Date(value);
   if (isNaN(date)) return String(value);
-  return date.toLocaleString();
+  return date.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
 }
 
 function relativeTime(value) {
