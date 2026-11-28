@@ -15,3 +15,4 @@ stats/
 config.php
 photoonmaps-config.php
 .env
+.cpanel.yml
