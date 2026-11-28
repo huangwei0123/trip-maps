@@ -1,10 +1,11 @@
 <?php
 /**
- * Save a trip (.KMZ or images) into the signed-in user's folder.
+ * Save a trip (.KMZ or images) into the signed-in user's metered storage.
  */
 
 require_once __DIR__ . '/lib/bootstrap.php';
 require_once __DIR__ . '/lib/auth.php';
+require_once __DIR__ . '/lib/billing.php';
 
 boot_session();
 
@@ -12,8 +13,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     json_fail('Method not allowed.', 405);
 }
 
-// A confirmed address is required, so the site cannot be used as free file
-// storage by throwaway accounts.
 $user = require_verified();
 require_csrf();
 
@@ -22,101 +21,175 @@ if (!preg_match('/^[a-z0-9_-]{1,64}$/', $folderSlug)) {
     json_fail('Invalid user directory identifier.', 400);
 }
 
+$entitlement = billing_entitlement($user);
 $tripSlug = preg_replace('/[^a-z0-9_-]/', '-', strtolower(trim((string) ($_POST['trip_slug'] ?? ''))));
 $tripSlug = trim((string) $tripSlug, '-');
-if ($tripSlug === '') {
-    $tripSlug = 'trip-' . time();
-}
-$tripSlug = substr($tripSlug, 0, 60);
+$tripSlug = substr($tripSlug !== '' ? $tripSlug : 'trip-' . time(), 0, 60);
 
 $saveMode = (string) ($_POST['save_mode'] ?? 'kmz_only');
 if (!in_array($saveMode, ['kmz_only', 'images_only'], true)) {
     json_fail('Unknown save mode.', 400);
 }
 
-$maxKmzBytes   = 64 * 1024 * 1024; // 64 MB
-$maxImageBytes = 16 * 1024 * 1024; // 16 MB per image
-
-// Locked strictly to /trip/<folderSlug>/<tripSlug>
-$tripDir = __DIR__ . '/trip/' . $folderSlug . '/' . $tripSlug;
-if (!is_dir($tripDir)) {
-    if (!@mkdir($tripDir, 0755, true) && !is_dir($tripDir)) {
-        json_fail('Failed to create trip directory.', 500);
-    }
-    @file_put_contents($tripDir . '/index.html', '<!doctype html><title>Trip Assets</title>');
-}
-
+$tripRoot = __DIR__ . '/trip/' . $folderSlug;
+$tripDir = $tripRoot . '/' . $tripSlug;
+$uploads = [];
 $relativeKmzPath = null;
-$savedPhotos     = [];
+$savedPhotos = [];
 
 if ($saveMode === 'kmz_only') {
     $file = $_FILES['kmz_file'] ?? null;
-
     if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-        json_fail('Missing or invalid KMZ file.');
+        json_fail('Missing or invalid KMZ file. If it is too large, check the PHP upload limit.');
     }
-    if ((int) $file['size'] > $maxKmzBytes) {
-        json_fail('That KMZ file is too large (64 MB limit).');
+    if ((int) $file['size'] > $entitlement['kmz_max_bytes']) {
+        json_fail(
+            'KMZ files are limited to ' . human_bytes($entitlement['kmz_max_bytes']) . '.',
+            413,
+            ['error_code' => 'FILE_TOO_LARGE']
+        );
     }
-    if (strtolower(pathinfo((string) $file['name'], PATHINFO_EXTENSION)) !== 'kmz') {
-        json_fail('Only .kmz files are accepted.');
+    if (strtolower(pathinfo((string) $file['name'], PATHINFO_EXTENSION)) !== 'kmz'
+        || !is_uploaded_file((string) $file['tmp_name'])) {
+        json_fail('Only valid uploaded .kmz files are accepted.');
     }
 
-    $kmzFilename = $tripSlug . '.kmz';
-    if (!move_uploaded_file($file['tmp_name'], $tripDir . '/' . $kmzFilename)) {
-        json_fail('Failed to write KMZ file.', 500);
-    }
-
-    $relativeKmzPath = "trip/$folderSlug/$tripSlug/$kmzFilename";
-}
-
-if ($saveMode === 'images_only') {
+    $filename = $tripSlug . '.kmz';
+    $destination = $tripDir . '/' . $filename;
+    $uploads[] = [
+        'tmp' => (string) $file['tmp_name'],
+        'destination' => $destination,
+        'size' => (int) $file['size'],
+        'relative' => 'trip/' . $folderSlug . '/' . $tripSlug . '/' . $filename,
+        'kind' => 'kmz',
+    ];
+} else {
     $files = $_FILES['photos'] ?? null;
-
     if (!is_array($files) || !is_array($files['name'] ?? null)) {
         json_fail('No images uploaded.');
     }
 
+    $plannedNames = [];
     $count = count($files['name']);
     for ($i = 0; $i < $count; $i++) {
-        if (($files['error'][$i] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            continue;
-        }
-        if ((int) $files['size'][$i] > $maxImageBytes) {
+        $error = $files['error'][$i] ?? UPLOAD_ERR_NO_FILE;
+        if ($error !== UPLOAD_ERR_OK) {
             continue;
         }
 
-        $tmp = (string) $files['tmp_name'][$i];
+        $size = (int) ($files['size'][$i] ?? 0);
+        if ($size > $entitlement['image_max_bytes']) {
+            json_fail(
+                'Each image is limited to ' . human_bytes($entitlement['image_max_bytes'])
+                . ' on your current plan.',
+                413,
+                ['error_code' => 'FILE_TOO_LARGE']
+            );
+        }
+
+        $tmp = (string) ($files['tmp_name'][$i] ?? '');
         if (!is_uploaded_file($tmp) || @getimagesize($tmp) === false) {
-            continue; // not actually an image
+            continue;
         }
 
-        $ext = strtolower(pathinfo((string) $files['name'][$i], PATHINFO_EXTENSION));
+        $ext = strtolower(pathinfo((string) ($files['name'][$i] ?? ''), PATHINFO_EXTENSION));
         if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
             continue;
         }
 
-        $safePhoto = preg_replace('/[^a-zA-Z0-9._-]/', '_', basename((string) $files['name'][$i]));
-        $safePhoto = substr((string) $safePhoto, 0, 120);
-        if ($safePhoto === '' || $safePhoto === '.' || $safePhoto === '..') {
+        $safeName = preg_replace('/[^a-zA-Z0-9._-]/', '_', basename((string) $files['name'][$i]));
+        $safeName = substr((string) $safeName, 0, 120);
+        if ($safeName === '' || $safeName === '.' || $safeName === '..') {
             continue;
         }
 
-        if (move_uploaded_file($tmp, $tripDir . '/' . $safePhoto)) {
-            $savedPhotos[] = "trip/$folderSlug/$tripSlug/$safePhoto";
+        $candidate = $safeName;
+        $suffix = 1;
+        $stem = pathinfo($safeName, PATHINFO_FILENAME);
+        $extension = pathinfo($safeName, PATHINFO_EXTENSION);
+        while (isset($plannedNames[$candidate]) || file_exists($tripDir . '/' . $candidate)) {
+            $suffix++;
+            $candidate = $stem . '-' . $suffix . ($extension !== '' ? '.' . $extension : '');
+            $candidate = substr($candidate, 0, 120);
         }
+        $plannedNames[$candidate] = true;
+
+        $uploads[] = [
+            'tmp' => $tmp,
+            'destination' => $tripDir . '/' . $candidate,
+            'size' => $size,
+            'relative' => 'trip/' . $folderSlug . '/' . $tripSlug . '/' . $candidate,
+            'kind' => 'image',
+        ];
     }
 
-    if (!$savedPhotos) {
-        json_fail('No valid images were saved.');
+    if (!$uploads) {
+        json_fail('No valid JPEG, PNG or WebP images were uploaded.');
     }
 }
 
+try {
+    $lock = lock_user_storage($folderSlug);
+} catch (Throwable $e) {
+    audit('Could not lock storage for user ' . (int) $user['id'] . ': ' . $e->getMessage());
+    json_fail('Could not prepare your storage. Please try again.', 500);
+}
+
+if (!is_dir($tripDir) && !@mkdir($tripDir, 0755, true) && !is_dir($tripDir)) {
+    unlock_user_storage($lock);
+    json_fail('Failed to create trip directory.', 500);
+}
+
+$usedBytes = user_storage_bytes($folderSlug);
+$projectedBytes = $usedBytes;
+foreach ($uploads as $upload) {
+    if (is_file($upload['destination'])) {
+        $projectedBytes -= (int) filesize($upload['destination']);
+    }
+    $projectedBytes += $upload['size'];
+}
+
+if ($projectedBytes > $entitlement['storage_quota_bytes']) {
+    unlock_user_storage($lock);
+    json_fail(
+        'This upload would exceed your ' . human_bytes($entitlement['storage_quota_bytes'])
+        . ' storage limit. Upgrade your plan or delete saved trips to make room.',
+        409,
+        [
+            'error_code' => 'QUOTA_EXCEEDED',
+            'storage_used_bytes' => $usedBytes,
+            'storage_quota_bytes' => $entitlement['storage_quota_bytes'],
+        ]
+    );
+}
+
+foreach ($uploads as $upload) {
+    if (!move_uploaded_file($upload['tmp'], $upload['destination'])) {
+        unlock_user_storage($lock);
+        json_fail('Failed to save an uploaded file. Please try again.', 500);
+    }
+
+    if ($upload['kind'] === 'kmz') {
+        $relativeKmzPath = $upload['relative'];
+    } else {
+        $savedPhotos[] = $upload['relative'];
+    }
+}
+
+if (!is_file($tripDir . '/index.html')) {
+    @file_put_contents($tripDir . '/index.html', '<!doctype html><title>Trip Assets</title>');
+}
+
+$usedBytes = user_storage_bytes($folderSlug);
+unlock_user_storage($lock);
+
 json_out([
-    'success'      => true,
-    'email'        => $user['email'],
-    'folder_slug'  => $folderSlug,
-    'save_mode'    => $saveMode,
-    'kmz_path'     => $relativeKmzPath,
+    'success' => true,
+    'email' => $user['email'],
+    'folder_slug' => $folderSlug,
+    'save_mode' => $saveMode,
+    'kmz_path' => $relativeKmzPath,
     'saved_photos' => $savedPhotos,
+    'storage_used_bytes' => $usedBytes,
+    'storage_quota_bytes' => $entitlement['storage_quota_bytes'],
 ]);

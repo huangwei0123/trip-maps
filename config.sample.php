@@ -39,6 +39,24 @@ return [
         'from_name'  => 'PhotoOnMaps',
     ],
 
+    'stripe' => [
+        // Create these prices in Stripe Dashboard. The subscription price can
+        // use monthly or annual billing; Checkout follows the price interval.
+        'secret_key'          => 'sk_test_CHANGE_ME',
+        'webhook_secret'      => 'whsec_CHANGE_ME',
+        'subscription_price'  => 'price_CHANGE_ME',
+        'lifetime_price'      => 'price_CHANGE_ME',
+        'api_version'         => '2025-03-31.basil',
+    ],
+
+    'plans' => [
+        'free_storage_bytes' => 1073741824,  // 1 GiB
+        'pro_storage_bytes'  => 21474836480, // 20 GiB
+        'free_image_bytes'   => 16777216,    // 16 MiB
+        'pro_image_bytes'    => 67108864,    // 64 MiB
+        'max_kmz_bytes'      => 67108864,    // 64 MiB
+    ],
+
     'app' => [
         // Used to build verification / reset links. No trailing slash.
         'base_url' => 'https://www.photoonmaps.com',

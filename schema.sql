@@ -17,10 +17,30 @@ CREATE TABLE IF NOT EXISTS users (
     folder_slug     VARCHAR(64)  NOT NULL,
     email_verified  TINYINT(1)   NOT NULL DEFAULT 0,
     session_version INT UNSIGNED NOT NULL DEFAULT 1,
+    stripe_customer_id VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NULL DEFAULT NULL,
+    stripe_subscription_id VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NULL DEFAULT NULL,
+    stripe_lifetime_payment_intent VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NULL DEFAULT NULL,
+    stripe_subscription_status VARCHAR(32) NULL DEFAULT NULL,
+    stripe_period_end DATETIME NULL DEFAULT NULL,
+    stripe_subscription_event_created BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    lifetime_pro TINYINT(1) NOT NULL DEFAULT 0,
     created_at      DATETIME     NOT NULL,
     updated_at      DATETIME     NOT NULL,
     UNIQUE KEY uq_email  (email_norm),
-    UNIQUE KEY uq_folder (folder_slug)
+    UNIQUE KEY uq_folder (folder_slug),
+    UNIQUE KEY uq_stripe_customer (stripe_customer_id),
+    UNIQUE KEY uq_stripe_subscription (stripe_subscription_id),
+    UNIQUE KEY uq_stripe_lifetime_payment (stripe_lifetime_payment_intent)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS stripe_events (
+    event_id    VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+    event_type  VARCHAR(100) NOT NULL,
+    related_payment_intent VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NULL DEFAULT NULL,
+    fully_refunded TINYINT(1) NULL DEFAULT NULL,
+    created_at  DATETIME NOT NULL,
+    processed_at DATETIME NOT NULL,
+    KEY idx_stripe_refund (related_payment_intent, fully_refunded)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS auth_tokens (

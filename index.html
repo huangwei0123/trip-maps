@@ -43,6 +43,7 @@
       <button id="openAuthModalBtn" class="secondary">Login / Register</button>
       <button id="openMyTripsBtn" class="secondary" style="display: none;">My Trips</button>
       <button id="openChangePwdBtn" class="secondary" style="display: none;">Change Password</button>
+      <button id="openBillingBtn" class="secondary">Plans &amp; Storage</button>
       <button id="logoutBtn" class="secondary" style="display: none;">Logout</button>
       <button id="openSaveModalBtn" class="save-btn" disabled>Save to Site</button>
       <button id="downloadKmzBtn" disabled>Download .KMZ</button>
@@ -144,6 +145,44 @@
     </div>
   </div>
 
+  <!-- Stripe plan and storage modal -->
+  <div class="modal-backdrop" id="billingModal" style="display: none;">
+    <div class="modal-card" style="max-width: 520px;">
+      <h3>Your Plan &amp; Storage</h3>
+      <p id="billingStatusText" style="font-size: 0.86rem; color: #3c4043;">
+        Sign in to view your plan and purchase options.
+      </p>
+      <div id="billingUsageBox" style="display: none; margin: 12px 0; padding: 12px; background: #f8f9fa; border: 1px solid #dadce0; border-radius: 8px;">
+        <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 0.82rem;">
+          <strong>Saved storage</strong>
+          <span id="billingUsageLabel">0 B / 1 GB</span>
+        </div>
+        <div style="height: 8px; margin-top: 8px; overflow: hidden; background: #e8eaed; border-radius: 99px;">
+          <div id="billingUsageBar" style="height: 100%; width: 0; background: #1a73e8; transition: width .2s;"></div>
+        </div>
+      </div>
+      <div id="billingOfferings" style="display: none; flex-direction: column; gap: 8px; margin-top: 14px;">
+        <button id="subscribeProBtn" type="button" class="save-btn">
+          Subscribe to Pro — 20 GB storage
+        </button>
+        <p style="margin: -3px 0 4px; font-size: 0.76rem; color: #5f6368;">
+          Recurring billing interval and price are shown securely by Stripe Checkout.
+        </p>
+        <button id="buyLifetimeProBtn" type="button" class="secondary">
+          Buy Lifetime Pro — one-time payment
+        </button>
+        <p style="margin: -3px 0 4px; font-size: 0.76rem; color: #5f6368;">
+          One payment permanently enables Pro limits; Stripe shows the final price before you pay.
+        </p>
+      </div>
+      <div id="billingMessage" style="display: none; margin-top: 10px; padding: 10px; border-radius: 6px; font-size: 0.82rem;"></div>
+      <div style="display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 14px;">
+        <button id="manageBillingBtn" type="button" class="secondary" style="display: none;">Manage Billing</button>
+        <button id="closeBillingBtn" type="button" class="secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Save Trip Modal -->
   <div class="modal-backdrop" id="saveModal" style="display: none;">
     <div class="modal-card">
@@ -195,6 +234,6 @@
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-  <script type="module" src="js/app.js?v=8"></script>
+  <script type="module" src="js/app.js?v=10"></script>
 </body>
 </html>
