@@ -4,12 +4,14 @@ const APP_SHELL_ASSETS = [
   "./",
   "index.html",
   "viewer.html",
+  "usage.html",
   "styles.css",
   "manifest.json",
   "js/app.js",
   "js/map.js",
   "js/kmz.js",
-  "js/auth.js"
+  "js/auth.js",
+  "js/usage.js"
 ];
 
 // 1. Pre-cache core HTML, CSS, and ES modules on install

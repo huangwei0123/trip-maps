@@ -15,6 +15,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
   const userBadge = document.getElementById("userBadge");
   const openAuthModalBtn = document.getElementById("openAuthModalBtn");
   const openMyTripsBtn = document.getElementById("openMyTripsBtn");
+  const openUsageBtn = document.getElementById("openUsageBtn");
   const openChangePwdBtn = document.getElementById("openChangePwdBtn");
   const openBillingBtn = document.getElementById("openBillingBtn");
   const logoutBtn = document.getElementById("logoutBtn");
@@ -283,6 +284,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
       openAuthModalBtn.style.display = "none";
       openMyTripsBtn.style.display = "inline-block";
+      if (openUsageBtn) openUsageBtn.style.display = "inline-block";
       openChangePwdBtn.style.display = "inline-block";
       logoutBtn.style.display = "inline-block";
       verifyBanner.style.display = user.verified ? "none" : "flex";
@@ -290,6 +292,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
       userBadge.style.display = "none";
       openAuthModalBtn.style.display = "inline-block";
       openMyTripsBtn.style.display = "none";
+      if (openUsageBtn) openUsageBtn.style.display = "none";
       openChangePwdBtn.style.display = "none";
       logoutBtn.style.display = "none";
       verifyBanner.style.display = "none";
@@ -811,6 +814,12 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
     openModal(myTripsModal);
     fetchAndRenderMyTrips();
   });
+
+  if (openUsageBtn) {
+    openUsageBtn.addEventListener("click", () => {
+      window.location.href = "usage.html";
+    });
+  }
 
   return { checkSessionStatus };
 }

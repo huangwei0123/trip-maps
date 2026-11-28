@@ -6,6 +6,7 @@
 require_once __DIR__ . '/lib/bootstrap.php';
 require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/billing.php';
+require_once __DIR__ . '/lib/usage.php';
 
 boot_session();
 
@@ -163,12 +164,14 @@ if ($projectedBytes > $entitlement['storage_quota_bytes']) {
     );
 }
 
+$uploadedBytes = 0;
 foreach ($uploads as $upload) {
     if (!move_uploaded_file($upload['tmp'], $upload['destination'])) {
         unlock_user_storage($lock);
         json_fail('Failed to save an uploaded file. Please try again.', 500);
     }
 
+    $uploadedBytes += (int) @filesize($upload['destination']);
     if ($upload['kind'] === 'kmz') {
         $relativeKmzPath = $upload['relative'];
     } else {
@@ -182,6 +185,14 @@ if (!is_file($tripDir . '/index.html')) {
 
 $usedBytes = user_storage_bytes($folderSlug);
 unlock_user_storage($lock);
+
+usage_log('link_created', $folderSlug, [
+    'trip'   => $tripSlug,
+    'mode'   => $saveMode,
+    'path'   => $relativeKmzPath !== null ? $relativeKmzPath : "trip/$folderSlug/$tripSlug/",
+    'bytes'  => $uploadedBytes,
+    'photos' => count($savedPhotos),
+]);
 
 json_out([
     'success' => true,
