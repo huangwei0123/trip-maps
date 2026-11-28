@@ -47,7 +47,9 @@ function current_user(): ?array
     }
 
     $st = db()->prepare(
-        'SELECT id, email, email_norm, password_hash, folder_slug, email_verified, session_version, created_at
+        'SELECT id, email, email_norm, password_hash, folder_slug, email_verified, session_version, created_at,
+                stripe_customer_id, stripe_subscription_id, stripe_lifetime_payment_intent,
+                stripe_subscription_status, stripe_period_end, stripe_subscription_event_created, lifetime_pro
            FROM users WHERE id = ? LIMIT 1'
     );
     $st->execute([(int) $userId]);

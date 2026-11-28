@@ -52,6 +52,20 @@ function app_config(): array
             'from_email' => '',
             'from_name'  => 'PhotoOnMaps',
         ];
+        $cfg['stripe'] = ($cfg['stripe'] ?? []) + [
+            'secret_key'         => '',
+            'webhook_secret'     => '',
+            'subscription_price' => '',
+            'lifetime_price'     => '',
+            'api_version'        => '2025-03-31.basil',
+        ];
+        $cfg['plans'] = ($cfg['plans'] ?? []) + [
+            'free_storage_bytes' => 1073741824,  // 1 GiB
+            'pro_storage_bytes'  => 21474836480, // 20 GiB
+            'free_image_bytes'   => 16777216,    // 16 MiB
+            'pro_image_bytes'    => 67108864,    // 64 MiB
+            'max_kmz_bytes'      => 67108864,    // 64 MiB
+        ];
         $cfg['app'] = ($cfg['app'] ?? []) + [
             'base_url'    => '',
             'debug'       => false,

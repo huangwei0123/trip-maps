@@ -26,7 +26,7 @@ single-use links.
 ## Requirements
 
 - PHP **8.0+** with `pdo_mysql` and `openssl`. `curl` is used if present (better
-  CA handling); `mbstring` is optional.
+  CA handling); `mbstring` is optional. Stripe billing also requires `curl`.
 - MySQL 5.7+ / 8.0.
 - An SMTP relay account.
 

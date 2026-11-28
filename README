@@ -1,0 +1,41 @@
+https://www.photoonmaps.com — display your photos on Google Earth.
+
+Turn geotagged photos into a 3D map, save trips into own folder, and share them as links or Google Earth `.KMZ` files.
+
+
+When browsering to site https://www.photoonmaps.com, one will see a demo/sample site,
+which is a group of photos taken while hiking Mount Sanitas, Boulder, Colorado.
+
+Click on each (red) pin, will have a thumbnail pop up showing the picture at that point.
+Clikc on the thumbnail, a larger photo will pop-up in a new window.
+
+To start import/upload your own photos.
+
+1. click "Clear" button at top-right.
+2. click the dashed rectecgular at left panel to upload your photos,
+   or drag and drop your selected photo(s) to the dashed rectangular.
+3. If your photos are geotagged, it will show a square with blue tick.
+   on the right, there is a square with red cross, which allow you to remove it (if you do not want to share).
+   
+   If you photos are not geotagged, there will be a empty square at left on the imgage square,
+   with red string under the image (small thumbnail).
+   
+   We can only use geotagged photos.
+   
+4. After you import all photos you want to share (usually for a trip, with 10-20 photos).
+
+   a. click the blue "Download .KMZ" at right of the menu bar, and save the .kmz file to your local disk.
+      Then open this .kmz file on your machine with google earth to see the photos.
+      If you want to share the .kmz file with your friends, you can send them the .kmz file.
+   b. click the green "Save the Site" to save this .kmz file on our server. To do so, you need:
+      i. click "Login/Register" a) register yourself (your only need to this once) b) login into your account.
+      ii. On the pop-up diaglog window, type in the filename you want to save, and click the green "Save .KMZ".
+      iii. when it is saved (uploaded to our server), you can click the blue "Copy Link" and share the link with your friends.
+           you can download the .kmz file to your local machine by click "Download hosted .KMZ" button.
+           
+ Now you can share the link with your friends and they can see it directly from our site.
+ Open this link: https://photoonmaps.com/?kmz=trip%2Fhuangwei5934-a0fdcd%2Fsanitas-20261121-3%2Fsanitas-20261121-3.kmz
+ you will see exactly what we see at our website example page.
+ 
+ 
+ 

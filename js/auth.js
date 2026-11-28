@@ -8,7 +8,7 @@ import { buildKmzBlob, escapeHtml } from "./kmz.js";
  * carries the CSRF token returned by action=status.
  */
 export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoadSavedKmz }) {
-  const state = { user: null, csrf: null };
+  const state = { user: null, csrf: null, billing: null };
   let mode = "login"; // 'login' | 'register' | 'forgot' | 'change'
 
   /* ---------------------------------------------------------- elements -- */
@@ -17,6 +17,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
   const openMyTripsBtn = document.getElementById("openMyTripsBtn");
   const openUsageBtn = document.getElementById("openUsageBtn");
   const openChangePwdBtn = document.getElementById("openChangePwdBtn");
+  const openBillingBtn = document.getElementById("openBillingBtn");
   const logoutBtn = document.getElementById("logoutBtn");
   const openSaveModalBtn = document.getElementById("openSaveModalBtn");
 
@@ -47,6 +48,18 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
 
   const closeAuthModalBtn = document.getElementById("closeAuthModalBtn");
   const submitAuthBtn = document.getElementById("submitAuthBtn");
+
+  const billingModal = document.getElementById("billingModal");
+  const billingStatusText = document.getElementById("billingStatusText");
+  const billingUsageBox = document.getElementById("billingUsageBox");
+  const billingUsageLabel = document.getElementById("billingUsageLabel");
+  const billingUsageBar = document.getElementById("billingUsageBar");
+  const billingOfferings = document.getElementById("billingOfferings");
+  const subscribeProBtn = document.getElementById("subscribeProBtn");
+  const buyLifetimeProBtn = document.getElementById("buyLifetimeProBtn");
+  const manageBillingBtn = document.getElementById("manageBillingBtn");
+  const closeBillingBtn = document.getElementById("closeBillingBtn");
+  const billingMessage = document.getElementById("billingMessage");
 
   const saveModal = document.getElementById("saveModal");
   const closeSaveModalBtn = document.getElementById("closeSaveModalBtn");
@@ -136,7 +149,125 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
           verified: Boolean(data.email_verified),
         }
       : null;
+    if (!state.user) state.billing = null;
     updateUI();
+  }
+
+  function showBillingMessage(message, kind = "info") {
+    billingMessage.textContent = message;
+    billingMessage.style.display = "block";
+    billingMessage.style.background = kind === "error" ? "#fce8e6" : "#e8f0fe";
+    billingMessage.style.border = kind === "error" ? "1px solid #f5c2c7" : "1px solid #c6dafc";
+    billingMessage.style.color = kind === "error" ? "#c5221f" : "#174ea6";
+  }
+
+  function renderBilling() {
+    if (!state.user) {
+      billingStatusText.textContent = "Sign in and confirm your email to view plans or purchase Pro.";
+      billingUsageBox.style.display = "none";
+      billingOfferings.style.display = "none";
+      manageBillingBtn.style.display = "none";
+      return;
+    }
+
+    const billing = state.billing;
+    if (!billing) {
+      billingStatusText.textContent = state.user.verified
+        ? "Loading your plan and storage…"
+        : "Confirm your email address before purchasing a plan.";
+      billingUsageBox.style.display = "none";
+      billingOfferings.style.display = "none";
+      manageBillingBtn.style.display = "none";
+      return;
+    }
+
+    const used = Number(billing.storage_used_bytes || 0);
+    const quota = Number(billing.storage_quota_bytes || 0);
+    const percent = quota > 0 ? Math.min(100, (used / quota) * 100) : 0;
+    billingUsageBox.style.display = "block";
+    billingUsageLabel.textContent = `${billing.storage_used_label} / ${billing.storage_quota_label}`;
+    billingUsageBar.style.width = `${percent.toFixed(1)}%`;
+    billingUsageBar.style.background = percent >= 90 ? "#d93025" : "#1a73e8";
+
+    if (billing.is_pro) {
+      if (billing.lifetime_pro) {
+        billingStatusText.textContent = "Lifetime Pro is active on your account.";
+      } else {
+        const status = billing.subscription_status || "active";
+        const end = billing.period_end_label ? ` (current period ends ${billing.period_end_label})` : "";
+        billingStatusText.textContent =
+          `Pro subscription: ${status}${end}. Buying Lifetime Pro will not cancel this subscription.`;
+      }
+    } else {
+      billingStatusText.textContent =
+        `Free plan: ${billing.storage_quota_label} storage; images up to ${billing.image_max_label}. Pro includes 20 GB storage and images up to 64 MB.`;
+      if (state.user.verified && !billing.checkout_subscription_ready && !billing.checkout_lifetime_ready) {
+        billingStatusText.textContent += " Paid checkout is not configured yet.";
+      }
+    }
+
+    const canShowSubscription = Boolean(billing.checkout_subscription_ready) && !billing.subscription_active;
+    const canShowLifetime = Boolean(billing.checkout_lifetime_ready) && !billing.lifetime_pro;
+    billingOfferings.style.display =
+      state.user.verified && !billing.lifetime_pro && (canShowSubscription || canShowLifetime) ? "flex" : "none";
+    subscribeProBtn.style.display = canShowSubscription ? "inline-block" : "none";
+    buyLifetimeProBtn.style.display = canShowLifetime ? "inline-block" : "none";
+    manageBillingBtn.style.display = billing.stripe_customer ? "inline-block" : "none";
+  }
+
+  async function refreshBillingStatus() {
+    if (!state.user) {
+      state.billing = null;
+      renderBilling();
+      return null;
+    }
+
+    const res = await fetch("billing.php?action=status", {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    const raw = await res.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      throw new Error(`Billing status returned HTTP ${res.status} (non-JSON).`);
+    }
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || "Could not load billing status.");
+    }
+
+    if (data.csrf) state.csrf = data.csrf;
+    state.billing = data.billing;
+    renderBilling();
+    return data.billing;
+  }
+
+  async function billingPost(action, fields = {}) {
+    const formData = new FormData();
+    formData.append("action", action);
+    Object.entries(fields).forEach(([key, value]) => formData.append(key, value ?? ""));
+
+    const headers = state.csrf ? { "X-CSRF-Token": state.csrf } : {};
+    const res = await fetch("billing.php", {
+      method: "POST",
+      body: formData,
+      headers,
+      credentials: "same-origin",
+    });
+    const raw = await res.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      throw new Error(`Billing request returned HTTP ${res.status} (non-JSON).`);
+    }
+    if (!res.ok || !data.success) {
+      const error = new Error(data.error || "Billing request failed.");
+      error.code = data.error_code || "";
+      throw error;
+    }
+    return data;
   }
 
   function updateUI() {
@@ -166,6 +297,7 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
       logoutBtn.style.display = "none";
       verifyBanner.style.display = "none";
     }
+    renderBilling();
   }
 
   function setMode(next) {
@@ -219,6 +351,35 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
       const res = await fetch("auth.php?action=status", { credentials: "same-origin" });
       const data = await res.json();
       applyStatus(data);
+      if (state.user) {
+        try {
+          await refreshBillingStatus();
+        } catch (billingError) {
+          console.warn("Billing status check failed:", billingError);
+        }
+      }
+
+      const billingReturn = new URLSearchParams(window.location.search).get("billing");
+      if (billingReturn === "success" || billingReturn === "cancelled") {
+        openModal(billingModal);
+        if (billingReturn === "success") {
+          try {
+            const billing = state.user ? await refreshBillingStatus() : null;
+            showBillingMessage(
+              billing && billing.is_pro
+                ? "Payment confirmed. Pro is active on your account."
+                : "Stripe returned you to the site. We’re waiting for payment confirmation; refresh this panel in a moment."
+            );
+          } catch {
+            showBillingMessage("Payment return received, but plan status could not be checked. Refresh this panel shortly.");
+          }
+        } else {
+          showBillingMessage("Checkout was canceled. No payment was made.");
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.delete("billing");
+        window.history.replaceState({}, "", url);
+      }
     } catch (err) {
       console.warn("Auth status check failed:", err);
     }
@@ -247,6 +408,62 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
   });
 
   closeAuthModalBtn.addEventListener("click", () => closeModal(authModal));
+  openBillingBtn.addEventListener("click", async () => {
+    billingMessage.style.display = "none";
+    openModal(billingModal);
+    try {
+      await refreshBillingStatus();
+    } catch (err) {
+      billingStatusText.textContent = err.message;
+    }
+  });
+  closeBillingBtn.addEventListener("click", () => closeModal(billingModal));
+
+  async function startCheckout(offering, button) {
+    if (!state.user) {
+      closeModal(billingModal);
+      setMode("login");
+      openModal(authModal);
+      return;
+    }
+    if (!state.user.verified) {
+      showBillingMessage("Confirm your email address before starting checkout.", "error");
+      return;
+    }
+
+    button.disabled = true;
+    const original = button.textContent;
+    button.textContent = "Opening secure checkout…";
+    try {
+      const data = await billingPost("checkout", { offering });
+      if (!data.url || !data.url.startsWith("https://checkout.stripe.com/")) {
+        throw new Error("Stripe returned an unexpected checkout URL.");
+      }
+      window.location.assign(data.url);
+    } catch (err) {
+      showBillingMessage(err.message, "error");
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  }
+
+  subscribeProBtn.addEventListener("click", () => startCheckout("subscription", subscribeProBtn));
+  buyLifetimeProBtn.addEventListener("click", () => startCheckout("lifetime", buyLifetimeProBtn));
+  manageBillingBtn.addEventListener("click", async () => {
+    manageBillingBtn.disabled = true;
+    try {
+      const data = await billingPost("portal");
+      if (!data.url || !data.url.startsWith("https://billing.stripe.com/")) {
+        throw new Error("Stripe returned an unexpected billing portal URL.");
+      }
+      window.location.assign(data.url);
+    } catch (err) {
+      showBillingMessage(err.message, "error");
+    } finally {
+      manageBillingBtn.disabled = false;
+    }
+  });
 
   [authEmailInput, authCurrentPasswordInput, authPasswordInput].forEach((input) => {
     input.addEventListener("keydown", (event) => {
@@ -272,11 +489,23 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
       if (mode === "login") {
         const data = await api("login", { email, password });
         applyStatus(data);
+        try {
+          await refreshBillingStatus();
+        } catch (billingError) {
+          console.warn("Could not load plan status after login:", billingError);
+        }
         authPasswordInput.value = "";
         closeModal(authModal);
       } else if (mode === "register") {
         const data = await api("register", { email, password });
-        if (data.logged_in) applyStatus(data);
+        if (data.logged_in) {
+          applyStatus(data);
+          try {
+            await refreshBillingStatus();
+          } catch (billingError) {
+            console.warn("Could not load plan status after registration:", billingError);
+          }
+        }
         authPasswordInput.value = "";
         showNotice(data.message || "Check your inbox to confirm your address.");
       } else if (mode === "forgot") {
@@ -311,7 +540,9 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
     }
     state.user = null;
     state.csrf = null;
+    state.billing = null;
     updateUI();
+    renderBilling();
     await checkSessionStatus();
   });
 
@@ -410,6 +641,12 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
         err.code = data.error_code || "";
         throw err;
       }
+      if (state.billing) {
+        state.billing.storage_used_bytes = data.storage_used_bytes;
+        state.billing.storage_quota_bytes = data.storage_quota_bytes;
+        state.billing.storage_used_label = formatBytes(data.storage_used_bytes);
+        renderBilling();
+      }
 
       shareResultBox.style.display = "flex";
       const statusHeader = shareResultBox.querySelector("strong");
@@ -427,16 +664,38 @@ export function initAccountSystem({ getActivePhotos, isConnectPathChecked, onLoa
         downloadHostedKmzLink.style.display = "none";
       }
     } catch (err) {
+      if (err.code === "QUOTA_EXCEEDED" || err.code === "FILE_TOO_LARGE") {
+        openModal(billingModal);
+        try {
+          await refreshBillingStatus();
+        } catch {
+          // Keep the upload error visible even if billing status is unavailable.
+        }
+        showBillingMessage(err.message, "error");
+      }
       if (err.code === "EMAIL_UNVERIFIED" && state.user) {
         state.user.verified = false;
         updateUI();
       }
-      alert(`Save failed: ${err.message}`);
+      if (err.code !== "QUOTA_EXCEEDED" && err.code !== "FILE_TOO_LARGE") {
+        alert(`Save failed: ${err.message}`);
+      }
     } finally {
       saveKmzOnlyBtn.disabled = false;
       saveImagesOnlyBtn.disabled = false;
       activeBtn.textContent = origLabel;
     }
+  }
+
+  function formatBytes(bytes) {
+    let value = Number(bytes) || 0;
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let index = 0;
+    while (value >= 1024 && index < units.length - 1) {
+      value /= 1024;
+      index++;
+    }
+    return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
   }
 
   saveKmzOnlyBtn.addEventListener("click", () => saveToDirectory("kmz_only"));
