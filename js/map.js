@@ -3,6 +3,15 @@ import { escapeHtml } from "./kmz.js";
 export function createMapController({ onPhotoPreview, onPinSelect }) {
   let mapReady = false;
   let activeMarkers = [];
+  let activeBasemap = "satellite";
+
+  const basemapLayers = {
+    satellite: "satellite-layer",
+    streets: "streets-layer",
+    topographic: "topographic-layer",
+    light: "light-gray-layer",
+    dark: "dark-gray-layer"
+  };
 
   const map = new maplibregl.Map({
     container: "map",
@@ -22,6 +31,38 @@ export function createMapController({ onPhotoPreview, onPinSelect }) {
           tileSize: 256,
           attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics"
         },
+        streets: {
+          type: "raster",
+          tiles: [
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+          ],
+          tileSize: 256,
+          attribution: "Street map &copy; Esri and its contributors"
+        },
+        topographic: {
+          type: "raster",
+          tiles: [
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
+          ],
+          tileSize: 256,
+          attribution: "Topographic map &copy; Esri and its contributors"
+        },
+        lightGray: {
+          type: "raster",
+          tiles: [
+            "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+          ],
+          tileSize: 256,
+          attribution: "Light Gray Canvas &copy; Esri and its contributors"
+        },
+        darkGray: {
+          type: "raster",
+          tiles: [
+            "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+          ],
+          tileSize: 256,
+          attribution: "Dark Gray Canvas &copy; Esri and its contributors"
+        },
         terrainDem: {
           type: "raster-dem",
           tiles: [
@@ -32,7 +73,13 @@ export function createMapController({ onPhotoPreview, onPinSelect }) {
           maxzoom: 15
         }
       },
-      layers: [{ id: "satellite-layer", type: "raster", source: "satellite" }],
+      layers: [
+        { id: "satellite-layer", type: "raster", source: "satellite" },
+        { id: "streets-layer", type: "raster", source: "streets", layout: { visibility: "none" } },
+        { id: "topographic-layer", type: "raster", source: "topographic", layout: { visibility: "none" } },
+        { id: "light-gray-layer", type: "raster", source: "lightGray", layout: { visibility: "none" } },
+        { id: "dark-gray-layer", type: "raster", source: "darkGray", layout: { visibility: "none" } }
+      ],
       terrain: { source: "terrainDem", exaggeration: 1.25 },
       sky: {
         "sky-color": "#7ec0ee",
@@ -194,6 +241,16 @@ export function createMapController({ onPhotoPreview, onPinSelect }) {
     }
   }
 
+  function setBasemap(name) {
+    if (!Object.prototype.hasOwnProperty.call(basemapLayers, name)) return;
+    activeBasemap = name;
+    if (!mapReady) return;
+
+    Object.entries(basemapLayers).forEach(([basemap, layerId]) => {
+      map.setLayoutProperty(layerId, "visibility", basemap === activeBasemap ? "visible" : "none");
+    });
+  }
+
   function onLoad(callback) {
     map.on("load", () => {
       mapReady = true;
@@ -215,12 +272,15 @@ export function createMapController({ onPhotoPreview, onPinSelect }) {
         layout: { "line-join": "round", "line-cap": "round" },
         paint: { "line-color": "#ff3b30", "line-width": 3, "line-dasharray": [2, 1.5] }
       });
+      setBasemap(activeBasemap);
       if (callback) callback();
     });
   }
 
   return {
     onLoad,
+    resize: () => map.resize(),
+    setBasemap,
     clearMarkers,
     updateRouteLine,
     fitToPins,
